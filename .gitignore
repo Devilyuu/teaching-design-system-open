@@ -34,6 +34,7 @@ build_lesson_plan_from_exact_template.py
 
 # Local agent and acceptance-test artifacts
 .superpowers/
+.worktrees/
 uat/
 task_plan.md
 findings.md
