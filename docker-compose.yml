@@ -1,0 +1,67 @@
+name: teaching-design-system
+
+services:
+  db:
+    container_name: teaching-design-db
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-teaching_design}
+      POSTGRES_USER: ${POSTGRES_USER:-teaching}
+      # No default: this database holds course material and teacher accounts,
+      # and a compose file that ships a password is a compose file everyone runs
+      # with the same one.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?请在 .env 中设置 POSTGRES_PASSWORD}
+    volumes:
+      - teaching-design-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-teaching} -d ${POSTGRES_DB:-teaching_design}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    container_name: teaching-design-api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-teaching}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-teaching_design}
+      UPLOAD_DIR: /data/uploads
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      MODEL_CONFIG_ENCRYPTION_KEY: ${MODEL_CONFIG_ENCRYPTION_KEY:?请在 .env 中设置 MODEL_CONFIG_ENCRYPTION_KEY}
+      # Unset, the API signs tokens with a per-process random key: every restart
+      # logs everyone out. A deployment names its own.
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?请在 .env 中设置 APP_SECRET_KEY}
+      INITIAL_ADMIN_EMPLOYEE_NO: ${INITIAL_ADMIN_EMPLOYEE_NO:-admin}
+      # Left empty, the first start draws a password and prints it once into
+      # `docker compose logs api`.
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+    volumes:
+      - teaching-design-data:/data
+    depends_on:
+      db:
+        # Start-up creates the tables, so the database has to be accepting
+        # connections rather than merely started.
+        condition: service_healthy
+
+  web:
+    container_name: teaching-design-web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_HOST:-0.0.0.0}:${WEB_PORT:-8081}:80"
+
+volumes:
+  # Uploaded course material and exports; the database keeps its own.
+  teaching-design-data:
+    name: teaching-design-data
+  teaching-design-db:
+    name: teaching-design-db

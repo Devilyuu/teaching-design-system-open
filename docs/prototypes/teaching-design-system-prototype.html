@@ -1,0 +1,1594 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>智能备课文档生成系统原型</title>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      --bg: #eef3fb;
+      --surface: #ffffff;
+      --surface-2: #f8fafd;
+      --line: #e9edf5;
+      --line-strong: #d5deed;
+      --text: #1e2430;
+      --muted: #7c8798;
+      --soft: #edf3ff;
+      --teal: #2452c7;
+      --teal-dark: #1f43b3;
+      --amber: #ff6b2b;
+      --amber-soft: #fff1e9;
+      --rose: #c84b62;
+      --rose-soft: #fff0f2;
+      --indigo: #3150a8;
+      --green-soft: #ebf7f1;
+      --shadow: 0 12px 28px rgba(31, 67, 179, 0.08);
+      --radius: 6px;
+      --topbar: #ffffff;
+      font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--bg);
+      font-size: 14px;
+      letter-spacing: 0;
+      padding: 16px;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 176px minmax(0, 1fr);
+      min-height: calc(100vh - 32px);
+      width: 100%;
+      max-width: none;
+      margin: 0 auto;
+      background: var(--bg);
+      border: 1px solid rgba(213, 222, 237, 0.72);
+      border-radius: 0;
+      box-shadow: 0 18px 38px rgba(31, 67, 179, 0.10);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .sidebar {
+      background: #fff;
+      border-right: 1px solid var(--line);
+      padding: 86px 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      position: relative;
+      min-height: calc(100vh - 32px);
+    }
+
+    .brand {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 176px;
+      height: 68px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background:
+        linear-gradient(135deg, #2452c7 0%, #2452c7 56%, #ff6b2b 56%, #ff6b2b 100%);
+      color: #fff;
+      flex: 0 0 auto;
+      box-shadow: 0 8px 18px rgba(36, 82, 199, 0.18);
+    }
+
+    .brand h1 {
+      font-size: 13px;
+      margin: 0;
+      line-height: 1.25;
+      color: var(--teal-dark);
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .nav {
+      display: grid;
+      gap: 4px;
+    }
+
+    .nav button {
+      width: 100%;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 8px;
+      background: transparent;
+      color: #303946;
+      border-radius: 4px;
+      text-align: left;
+    }
+
+    .nav button:hover {
+      background: #f4f7ff;
+      color: var(--text);
+    }
+
+    .nav button.active {
+      background: #f0f4ff;
+      color: var(--teal-dark);
+      font-weight: 700;
+      box-shadow: inset 4px 0 0 var(--teal);
+    }
+
+    .nav .icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+    }
+
+    .sidebar-footer {
+      margin-top: auto;
+      border-top: 1px solid var(--line);
+      padding: 14px 8px 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding-top: 68px;
+      background: var(--bg);
+    }
+
+    .topbar {
+      min-height: 68px;
+      background: var(--topbar);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 24px;
+      position: absolute;
+      top: 0;
+      left: 176px;
+      right: 0;
+      z-index: 5;
+      color: var(--teal-dark);
+    }
+
+    .topbar-title {
+      min-width: 0;
+    }
+
+    .topbar-title h2 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.2;
+      color: var(--text);
+    }
+
+    .topbar-title p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .topbar-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .topbar-actions[hidden] {
+      display: none;
+    }
+
+    .btn {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: 4px;
+      padding: 7px 12px;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--line);
+      box-shadow: none;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      border-color: var(--line-strong);
+      color: var(--teal-dark);
+    }
+
+    .btn.primary {
+      background: var(--teal);
+      color: #fff;
+      border-color: var(--teal);
+    }
+
+    .btn.primary:hover {
+      background: var(--teal-dark);
+    }
+
+    .btn.warn {
+      background: #fff;
+      color: var(--amber);
+      border-color: rgba(255, 107, 43, 0.52);
+    }
+
+    .btn .icon {
+      width: 16px;
+      height: 16px;
+    }
+
+    .content {
+      padding: 18px 22px 26px;
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .layout-main-aside {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .layout-aside-main {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .lesson-layout {
+      grid-template-columns: 220px minmax(0, 1fr);
+    }
+
+    .outline-layout {
+      grid-template-columns: 220px minmax(0, 1fr);
+    }
+
+    .outline-layout > aside:last-child,
+    .lesson-layout > aside:last-child {
+      grid-column: 2;
+    }
+
+    .lesson-preview-panel {
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .lesson-preview-panel .panel-body,
+    .lesson-preview-panel .doc-preview,
+    .lesson-preview-panel .doc-section,
+    .lesson-preview-panel .table-wrap {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .lesson-preview-panel .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      min-height: 48px;
+      padding: 15px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .panel-head h3 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .panel-head .sub {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .panel-body {
+      padding: 16px 18px;
+    }
+
+    .metric {
+      padding: 14px 16px;
+      min-height: 112px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-left: 0;
+      border-top: 0;
+      background: linear-gradient(180deg, #fbfcff 0%, #fff 100%);
+    }
+
+    .metric.amber {
+      background: linear-gradient(180deg, #fffaf0 0%, #fff 100%);
+    }
+
+    .metric.rose {
+      background: linear-gradient(180deg, #fff7f8 0%, #fff 100%);
+    }
+
+    .metric strong {
+      font-size: 26px;
+      line-height: 1;
+    }
+
+    .metric span {
+      color: var(--muted);
+    }
+
+    .process-flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    #dashboard > .panel:first-child {
+      border-color: #d7e0f3;
+      background:
+        linear-gradient(120deg, rgba(244, 247, 255, 0.96) 0%, rgba(255, 255, 255, 0.96) 62%),
+        radial-gradient(circle at 88% 14%, rgba(36, 82, 199, 0.14), transparent 28%);
+    }
+
+    #dashboard > .panel:first-child .panel-head,
+    #dashboard > .panel:first-child .panel-body {
+      background: transparent;
+    }
+
+    #dashboard > .panel:first-child .panel-head {
+      border-bottom-color: rgba(36, 82, 199, 0.12);
+    }
+
+    .flow-card {
+      min-height: 88px;
+      border: 1px solid #dde5f6;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.88);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: 10px;
+      position: relative;
+      box-shadow: 0 12px 24px rgba(31, 67, 179, 0.06);
+    }
+
+    .flow-card .number {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: linear-gradient(145deg, #315ee0, #1f43b3);
+      font-weight: 800;
+    }
+
+    .flow-card h4 {
+      margin: 0;
+      font-size: 15px;
+    }
+
+    .flow-card p {
+      grid-column: 2;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .plain-note {
+      border: 1px solid #dce5f8;
+      border-left: 4px solid var(--teal);
+      border-radius: 4px;
+      background: linear-gradient(90deg, #f5f7ff 0%, #ffffff 100%);
+      padding: 12px 14px;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .plain-note strong {
+      color: var(--text);
+    }
+
+    .task-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .task-row {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      text-align: left;
+    }
+
+    .task-row:hover {
+      border-color: var(--teal);
+      box-shadow: 0 10px 20px rgba(36, 82, 199, 0.10);
+    }
+
+    .task-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .task-meta {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: var(--soft);
+      color: var(--teal-dark);
+      white-space: nowrap;
+    }
+
+    .tag.amber {
+      background: var(--amber-soft);
+      color: #81510d;
+    }
+
+    .tag.rose {
+      background: var(--rose-soft);
+      color: var(--rose);
+    }
+
+    .tag.green {
+      background: var(--green-soft);
+      color: #287646;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 8px 10px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 3px rgba(36, 82, 199, 0.10);
+    }
+
+    .upload-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .upload-item {
+      border: 1px dashed var(--line-strong);
+      border-radius: 6px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      background: #fbfdff;
+    }
+
+    .upload-item strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .upload-item span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .step {
+      min-height: 52px;
+      padding: 10px;
+      border-radius: 6px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .step.active {
+      border-color: var(--teal);
+      background: #f0f4ff;
+      color: var(--teal-dark);
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+
+    .lesson-preview-panel table {
+      min-width: 760px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      padding: 9px 10px;
+      vertical-align: top;
+      text-align: left;
+      line-height: 1.5;
+    }
+
+    th:last-child, td:last-child {
+      border-right: 0;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    th {
+      background: #f7fafc;
+      color: #3c4744;
+      font-size: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    td[contenteditable="true"] {
+      min-width: 110px;
+      background: #fff;
+      outline: none;
+    }
+
+    td[contenteditable="true"]:focus {
+      background: #f6f8ff;
+      box-shadow: inset 0 0 0 2px #6f8ce8;
+    }
+
+    .goal-list,
+    .check-list,
+    .lesson-list,
+    .library-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .goal-item,
+    .check-item,
+    .lesson-item,
+    .library-item {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .goal-item strong,
+    .check-item strong,
+    .lesson-item strong,
+    .library-item strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .goal-item p,
+    .check-item p,
+    .lesson-item p,
+    .library-item p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .check-item {
+      border-left: 4px solid var(--teal);
+    }
+
+    .check-item.warn {
+      border-left-color: var(--amber);
+      background: #fffaf0;
+    }
+
+    .check-item.alert {
+      border-left-color: var(--rose);
+      background: #fff7f8;
+    }
+
+    .lesson-item {
+      text-align: left;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    .lesson-item.active {
+      border-color: var(--teal);
+      background: #f0f4ff;
+    }
+
+    .doc-preview {
+      display: grid;
+      gap: 12px;
+    }
+
+    .doc-section {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 12px;
+    }
+
+    .doc-section:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .doc-section h4 {
+      margin: 0 0 8px;
+      font-size: 14px;
+    }
+
+    .objective-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .objective-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 72px minmax(118px, 150px);
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .objective-row div {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px;
+      background: #fff;
+      line-height: 1.5;
+    }
+
+    .question-editor {
+      display: grid;
+      gap: 10px;
+    }
+
+    .question-block {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .segmented {
+      display: inline-grid;
+      grid-auto-flow: column;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .segmented button {
+      min-height: 34px;
+      padding: 7px 12px;
+      background: #fff;
+      color: var(--muted);
+      border-right: 1px solid var(--line);
+    }
+
+    .segmented button:last-child {
+      border-right: 0;
+    }
+
+    .segmented button.active {
+      background: var(--soft);
+      color: var(--teal-dark);
+      font-weight: 700;
+    }
+
+    .admin-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .role-divider {
+      margin: 10px 8px 0;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .status-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    @media (max-width: 1120px) {
+      .layout-aside-main,
+      .layout-main-aside {
+        grid-template-columns: 1fr;
+      }
+
+      .grid-3,
+      .grid-2,
+      .process-flow,
+      .admin-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 1500px) and (min-width: 1121px) {
+      .outline-layout,
+      .lesson-layout {
+        grid-template-columns: 220px minmax(0, 1fr);
+      }
+
+      .outline-layout > aside:last-child,
+      .lesson-layout > aside:last-child {
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 1240px) and (min-width: 1121px) {
+      .lesson-layout {
+        grid-template-columns: 230px minmax(0, 1fr);
+      }
+
+      .objective-row {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 0;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        min-height: 100vh;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        border-radius: 0;
+        border: 0;
+        box-shadow: none;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        min-height: auto;
+        padding: 84px 14px 18px;
+      }
+
+      .brand {
+        width: 100%;
+      }
+
+      .main {
+        padding-top: 0;
+      }
+
+      .topbar {
+        position: static;
+        left: auto;
+        right: auto;
+        padding: 12px 16px;
+        min-height: 64px;
+      }
+
+      .nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .content {
+        padding: 16px;
+      }
+
+      .form-grid,
+      .steps {
+        grid-template-columns: 1fr;
+      }
+
+      .objective-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><i data-lucide="book-open-check"></i></div>
+        <div>
+          <h1>智能备课文档生成系统</h1>
+          <p>高职艺术设计类课程</p>
+        </div>
+      </div>
+      <nav class="nav" aria-label="主导航">
+        <button class="active" data-view="dashboard"><i class="icon" data-lucide="layout-dashboard"></i><span>教师工作台</span></button>
+        <button data-view="new-task"><i class="icon" data-lucide="file-plus-2"></i><span>新建任务</span></button>
+        <button data-view="outline"><i class="icon" data-lucide="table-2"></i><span>课程实施大纲</span></button>
+        <button data-view="lesson"><i class="icon" data-lucide="notebook-tabs"></i><span>教案生成</span></button>
+        <button data-view="assessment"><i class="icon" data-lucide="clipboard-list"></i><span>作业试卷</span></button>
+        <div class="role-divider">管理员入口</div>
+        <button data-view="admin"><i class="icon" data-lucide="settings-2"></i><span>标准库与模板库</span></button>
+      </nav>
+      <div class="sidebar-footer">
+        <div>当前课程</div>
+        <strong>人工智能与创意设计</strong>
+        <div>数字媒体艺术设计 / 32 学时 / 8 次课</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-title">
+          <h2 id="page-title">教师工作台</h2>
+          <p id="page-subtitle">2026-2027 第一学期 · 数字艺术25级1班 · 张明</p>
+        </div>
+        <div class="topbar-actions" data-actions="dashboard">
+          <button class="btn"><i class="icon" data-lucide="history"></i>查看记录</button>
+          <button class="btn primary" data-view-jump="new-task"><i class="icon" data-lucide="plus"></i>新建备课任务</button>
+        </div>
+        <div class="topbar-actions" data-actions="new-task" hidden>
+          <button class="btn"><i class="icon" data-lucide="save"></i>保存草稿</button>
+          <button class="btn primary" data-view-jump="outline"><i class="icon" data-lucide="sparkles"></i>开始生成</button>
+        </div>
+        <div class="topbar-actions" data-actions="outline" hidden>
+          <button class="btn"><i class="icon" data-lucide="message-square-text"></i>AI 优化表格</button>
+          <button class="btn primary"><i class="icon" data-lucide="download"></i>导出课程实施大纲</button>
+        </div>
+        <div class="topbar-actions" data-actions="lesson" hidden>
+          <button class="btn"><i class="icon" data-lucide="files"></i>整门课合集</button>
+          <button class="btn primary"><i class="icon" data-lucide="download"></i>导出当前教案</button>
+        </div>
+        <div class="topbar-actions" data-actions="assessment" hidden>
+          <button class="btn"><i class="icon" data-lucide="refresh-cw"></i>重新生成</button>
+          <button class="btn primary"><i class="icon" data-lucide="download"></i>导出作业/试卷</button>
+        </div>
+        <div class="topbar-actions" data-actions="admin" hidden>
+          <button class="btn"><i class="icon" data-lucide="upload"></i>上传标准</button>
+          <button class="btn primary"><i class="icon" data-lucide="save"></i>保存配置</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="view active" id="dashboard">
+          <div class="panel">
+            <div class="panel-head">
+              <h3>从模板到 Word，只走四步</h3>
+              <span class="sub">教师可在网页改，也可导出后到 WPS/Office 改</span>
+            </div>
+            <div class="panel-body">
+              <div class="process-flow">
+                <div class="flow-card">
+                  <div class="number">1</div>
+                  <h4>上传资料和模板</h4>
+                  <p>上传课程标准、课表、课程实施大纲模板、教案模板。</p>
+                </div>
+                <div class="flow-card">
+                  <div class="number">2</div>
+                  <h4>点击生成初稿</h4>
+                  <p>系统按课表日期、课程目标和 Word 模板自动填充内容。</p>
+                </div>
+                <div class="flow-card">
+                  <div class="number">3</div>
+                  <h4>确认或简单修改</h4>
+                  <p>可在网页中调整日期、教学内容、课次目标和作业要求。</p>
+                </div>
+                <div class="flow-card">
+                  <div class="number">4</div>
+                  <h4>导出 Word 文档</h4>
+                  <p>导出的 .docx 可继续在 WPS 或 Office 中修改、打印、提交。</p>
+                </div>
+              </div>
+              <div style="height:12px;"></div>
+              <div class="plain-note">
+                <strong>最简单的用法：</strong>教师可以上传材料后直接生成并导出 Word，不一定要在网页里细改。网页编辑主要用于生成前快速确认和批量调整。
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>继续处理</h3>
+                <button class="btn primary" data-view-jump="new-task"><i class="icon" data-lucide="plus"></i>新建备课任务</button>
+              </div>
+              <div class="panel-body task-list">
+                <button class="task-row" data-view-jump="outline">
+                  <div>
+                    <div class="task-title">人工智能与创意设计</div>
+                    <div class="task-meta">已生成课程实施大纲初稿，可确认后导出 Word</div>
+                  </div>
+                  <span class="tag amber">继续确认</span>
+                </button>
+                <button class="task-row" data-view-jump="lesson">
+                  <div>
+                    <div class="task-title">UI 界面设计</div>
+                    <div class="task-meta">教案已按课次生成，可导出单次或整门课合集</div>
+                  </div>
+                  <span class="tag">查看教案</span>
+                </button>
+                <button class="task-row" data-view-jump="assessment">
+                  <div>
+                    <div class="task-title">图像处理技术</div>
+                    <div class="task-meta">第 3 次课作业已生成，可网页编辑或直接导出</div>
+                  </div>
+                  <span class="tag rose">处理作业</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="new-task">
+          <div class="steps">
+            <div class="step active"><i data-lucide="book-marked"></i>基础信息</div>
+            <div class="step"><i data-lucide="upload"></i>材料上传</div>
+            <div class="step"><i data-lucide="scan-text"></i>识别结果</div>
+            <div class="step"><i data-lucide="check-circle-2"></i>生成确认</div>
+          </div>
+
+          <div class="layout-main-aside">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>第 1 步：填写课程信息</h3>
+                <span class="sub">一次课默认连续 4 节</span>
+              </div>
+              <div class="panel-body">
+                <div class="form-grid">
+                  <label>学期<input value="2026-2027 第一学期"></label>
+                  <label>专业<input value="数字媒体艺术设计"></label>
+                  <label>课程<input value="人工智能与创意设计"></label>
+                  <label>班级<input value="数字艺术25级1班"></label>
+                  <label>任课教师<input value="张明"></label>
+                  <label>上课地点<input value="智慧教室/数字媒体实训室"></label>
+                  <label>课程总学时<input type="number" value="32"></label>
+                  <label>每次课学时<input type="number" value="4"></label>
+                </div>
+
+                <div style="height:14px;"></div>
+                <div class="upload-list">
+                  <div class="upload-item">
+                    <i data-lucide="file-text"></i>
+                    <div><strong>课程标准</strong><span>《人工智能与创意设计》课程标准.docx</span></div>
+                    <span class="tag green">已上传</span>
+                  </div>
+                  <div class="upload-item">
+                    <i data-lucide="sheet"></i>
+                    <div><strong>教务课表</strong><span>Excel 课表 · 8 条连续 4 节课</span></div>
+                    <span class="tag green">已上传</span>
+                  </div>
+                  <div class="upload-item">
+                    <i data-lucide="file-type-2"></i>
+                    <div><strong>课程实施大纲模板</strong><span>直接上传学校 Word 模板，系统只填内容不改格式</span></div>
+                    <span class="tag green">已上传</span>
+                  </div>
+                  <div class="upload-item">
+                    <i data-lucide="file-pen-line"></i>
+                    <div><strong>教案模板</strong><span>可稍后上传，也可先生成课程实施大纲</span></div>
+                    <span class="tag amber">可选</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h3>生成前确认</h3>
+                <span class="sub">系统自动检查</span>
+              </div>
+              <div class="panel-body check-list">
+                <div class="check-item">
+                  <strong>资料已够生成初稿</strong>
+                  <p>课程标准、课表和课程实施大纲模板已就绪。</p>
+                </div>
+                <div class="check-item warn">
+                  <strong>Word 模板会保持格式</strong>
+                  <p>系统只填充内容，导出后仍可在 WPS/Office 中继续修改。</p>
+                </div>
+                <div class="check-item">
+                  <strong>能力指标自动匹配</strong>
+                  <p>已关联 2025 版数字媒体艺术设计专业能力指标库。</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <button class="btn primary" data-view-jump="outline"><i class="icon" data-lucide="sparkles"></i>生成课程实施大纲</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="outline">
+          <div class="layout-aside-main outline-layout">
+            <aside class="panel">
+              <div class="panel-head">
+                <h3>生成依据</h3>
+                <span class="sub">自动读取</span>
+              </div>
+              <div class="panel-body goal-list">
+                <div class="goal-item">
+                  <strong>课程标准</strong>
+                  <p>已读取课程目标、项目模块、参考课时和考核方式。</p>
+                  <div class="status-line"><span class="tag green">M1-M4</span></div>
+                </div>
+                <div class="goal-item">
+                  <strong>课表</strong>
+                  <p>识别到 8 次课，每次连续 4 节，共 32 学时。</p>
+                  <div class="status-line"><span class="tag green">Excel</span><span class="tag">1-4 节</span></div>
+                </div>
+                <div class="goal-item">
+                  <strong>Word 模板</strong>
+                  <p>将按上传模板填充内容，导出后可继续在 WPS/Office 修改。</p>
+                  <div class="status-line"><span class="tag green">保持格式</span></div>
+                </div>
+                <div class="goal-item">
+                  <strong>能力指标</strong>
+                  <p>已关联人才培养方案，系统会自动检查，不需要教师手工查代码。</p>
+                  <div class="status-line"><span class="tag">自动校验</span></div>
+                </div>
+              </div>
+            </aside>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h3>课程实施大纲 · 先确认这张表</h3>
+                <div class="status-line"><span class="tag green">32 学时</span><span class="tag">8 次课</span></div>
+              </div>
+              <div class="panel-body" style="padding-bottom:0;">
+                <div class="plain-note">
+                  这里主要调整上课日期、周次、节次和教学内容。更多细节如课程思政、教学方法、能力指标会在右侧自动显示，也会一并写入 Word。
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>课次</th>
+                        <th>日期</th>
+                        <th>周次</th>
+                        <th>节次</th>
+                        <th>教学内容</th>
+                        <th>课前、课中、课后任务</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>第 1 次</td>
+                        <td contenteditable="true">以课表为准</td>
+                        <td contenteditable="true">1</td>
+                        <td contenteditable="true">1-4</td>
+                        <td contenteditable="true">项目导入：课程目标、考核方式、文创 IP 与 AI 辅助设计案例。</td>
+                        <td contenteditable="true">课前了解文创 IP 案例；课中完成方向初选；课后提交案例分析。</td>
+                      </tr>
+                      <tr>
+                        <td>第 2 次</td>
+                        <td contenteditable="true">以课表为准</td>
+                        <td contenteditable="true">2</td>
+                        <td contenteditable="true">1-4</td>
+                        <td contenteditable="true">文创主题调研：文化资料搜集、关键词提炼、受众分析、IP 定位表。</td>
+                        <td contenteditable="true">课前收集文化主题资料；课中完成关键词图谱；课后提交定位表。</td>
+                      </tr>
+                      <tr>
+                        <td>第 3 次</td>
+                        <td contenteditable="true">以课表为准</td>
+                        <td contenteditable="true">3</td>
+                        <td contenteditable="true">1-4</td>
+                        <td contenteditable="true">角色设定与故事建构：身份、性格、故事背景、提示词结构。</td>
+                        <td contenteditable="true">课前准备角色灵感；课中完成设定卡；课后修改故事说明。</td>
+                      </tr>
+                      <tr>
+                        <td>第 4 次</td>
+                        <td contenteditable="true">以课表为准</td>
+                        <td contenteditable="true">4</td>
+                        <td contenteditable="true">1-4</td>
+                        <td contenteditable="true">IP 角色形象生成：多方向生成、风格筛选、局部优化、角色一致性。</td>
+                        <td contenteditable="true">课前准备提示词；课中生成候选角色；课后提交过程对比图。</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <aside class="panel">
+              <div class="panel-head">
+                <h3>当前课次详情</h3>
+                <span class="sub">自动带入 Word</span>
+              </div>
+              <div class="panel-body check-list">
+                <div class="check-item">
+                  <strong>课程目标</strong>
+                  <p>第 1 次课对应 M1/M3/M4。</p>
+                </div>
+                <div class="check-item warn">
+                  <strong>课程思政</strong>
+                  <p>技术向善、职业规范。可在详情编辑中调整。</p>
+                </div>
+                <div class="check-item">
+                  <strong>能力指标</strong>
+                  <p>1-3-4、3-2-1、3-5-1 已自动匹配。</p>
+                </div>
+                <div class="check-item alert">
+                  <strong>导出提醒</strong>
+                  <p>导出 Word 后可以继续在 WPS/Office 中修改最终文字。</p>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="lesson">
+          <div class="layout-aside-main lesson-layout">
+            <aside class="panel">
+              <div class="panel-head">
+                <h3>课次</h3>
+                <span class="sub">8 次课</span>
+              </div>
+              <div class="panel-body lesson-list">
+                <button class="lesson-item active"><strong>第 1 次课</strong><p>项目导入：AI 辅助文创 IP 设计认知与规范</p></button>
+                <button class="lesson-item"><strong>第 2 次课</strong><p>文创主题调研与 IP 定位</p></button>
+                <button class="lesson-item"><strong>第 3 次课</strong><p>角色设定与故事建构</p></button>
+                <button class="lesson-item"><strong>第 4 次课</strong><p>IP 角色形象生成与优化</p></button>
+                <button class="lesson-item"><strong>第 5 次课</strong><p>IP 视觉规范与表情动作设计</p></button>
+                <button class="lesson-item"><strong>第 6 次课</strong><p>文创产品与传播物料延展</p></button>
+              </div>
+            </aside>
+
+            <div class="panel lesson-preview-panel">
+              <div class="panel-head">
+                <h3>教案预览</h3>
+                <div class="status-line"><span class="tag green">单次课</span><span class="tag">可编辑</span></div>
+              </div>
+              <div class="panel-body doc-preview">
+                <div class="plain-note">
+                  网页里主要确认结构、目标和课次内容。导出 Word 后，教师仍然可以在 WPS 或 Office 中继续润色和排版。
+                </div>
+                <div class="doc-section">
+                  <h4>一、教学基本情况</h4>
+                  <div class="form-grid">
+                    <label>课程名称<input value="人工智能与创意设计"></label>
+                    <label>本次课标题<input value="项目导入：AI 辅助文创 IP 设计认知与规范"></label>
+                    <label>授课班级<input value="数字艺术25级1班"></label>
+                    <label>授课学时<input value="4"></label>
+                  </div>
+                </div>
+
+                <div class="doc-section">
+                  <h4>本次课教学目标</h4>
+                  <div class="objective-grid">
+                    <div class="objective-row">
+                      <div contenteditable="true">K1：理解课程目标、考核方式、综合项目成果要求，认识 AIGC 与文创 IP 设计的关系。</div>
+                      <div>M1</div>
+                      <div>1-3-4 1-3-5</div>
+                    </div>
+                    <div class="objective-row">
+                      <div contenteditable="true">K2：通过优秀文创 IP、城市 IP、校园 IP 案例分析，形成审美判断与技术向善意识。</div>
+                      <div>M3</div>
+                      <div>3-2-1 3-3-3</div>
+                    </div>
+                    <div class="objective-row">
+                      <div contenteditable="true">K3：建立 AI 辅助而非 AI 替代的设计观，理解版权、原创性和 AI 使用声明要求。</div>
+                      <div>M4</div>
+                      <div>3-5-1</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="doc-section">
+                  <h4>二、教学实施过程</h4>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>教学环节</th>
+                          <th>时长</th>
+                          <th>教学内容</th>
+                          <th>教师活动</th>
+                          <th>学生活动</th>
+                          <th>目标</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>课前</td>
+                          <td>课前</td>
+                          <td contenteditable="true">了解一个文创 IP、城市 IP、校园 IP 或非遗 IP 案例。</td>
+                          <td contenteditable="true">发布课前学习任务，明确资料准备要求。</td>
+                          <td contenteditable="true">记录主题来源、角色特点和传播场景。</td>
+                          <td></td>
+                        </tr>
+                        <tr>
+                          <td>课中</td>
+                          <td contenteditable="true">20 分钟</td>
+                          <td contenteditable="true">说明课程节奏、成果清单和提交节点。</td>
+                          <td contenteditable="true">发布学习任务，明确过程记录要求。</td>
+                          <td contenteditable="true">记录课程成果清单。</td>
+                          <td>M1</td>
+                        </tr>
+                        <tr>
+                          <td>课中</td>
+                          <td contenteditable="true">55 分钟</td>
+                          <td contenteditable="true">优秀文创 IP、城市 IP、校园 IP 及 AI 辅助设计案例赏析。</td>
+                          <td contenteditable="true">组织学生从文化来源、视觉系统、传播场景分析。</td>
+                          <td contenteditable="true">分组讨论案例成功因素。</td>
+                          <td>M3</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside class="panel">
+              <div class="panel-head">
+                <h3>指标校验</h3>
+                <span class="sub">K → M → 代码</span>
+              </div>
+              <div class="panel-body check-list">
+                <div class="check-item">
+                  <strong>K1 → M1</strong>
+                  <p>匹配 1-3-4、1-3-5、1-3-6，当前显示缺少 1-3-6。</p>
+                </div>
+                <div class="check-item">
+                  <strong>K2 → M3</strong>
+                  <p>3-2-1：展现一定的文化品位、审美情趣。</p>
+                </div>
+                <div class="check-item warn">
+                  <strong>时长合计</strong>
+                  <p>当前课中环节 110 分钟，建议补足到 160 分钟。</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <button class="btn primary"><i class="icon" data-lucide="refresh-cw"></i>重新生成本课</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="assessment">
+          <div class="layout-main-aside">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>作业/试卷生成</h3>
+                <div class="segmented">
+                  <button class="active">作业</button>
+                  <button>试卷</button>
+                </div>
+              </div>
+              <div class="panel-body">
+                <div class="form-grid">
+                  <label>来源课次<select><option>第 2 次课 · 文创主题调研与 IP 定位</option></select></label>
+                  <label>难度<select><option>中等</option><option>基础</option><option>提高</option></select></label>
+                  <label>评分标准<select><option>包含评价量规</option><option>仅包含分值</option></select></label>
+                  <label>参考答案<select><option>不生成参考答案</option><option>生成参考答案</option></select></label>
+                </div>
+                <div style="height:14px;"></div>
+                <div class="plain-note">
+                  生成后可以在网页里改题目和评分标准；也可以直接导出 Word，再到 WPS/Office 中做最终修改。
+                </div>
+                <div style="height:14px;"></div>
+                <div class="question-editor">
+                  <div class="question-block">
+                    <div class="status-line"><span class="tag">任务型作业</span><span class="tag">M1/M2/M4</span></div>
+                    <label>作业标题<input value="文创主题调研与 IP 定位表"></label>
+                    <label>任务说明<textarea>围绕地方文化、校园文化、非遗文化或城市文旅主题，完成资料搜集、关键词提炼、目标受众分析和 IP 定位说明。</textarea></label>
+                    <label>提交要求<textarea>提交《文创主题调研与 IP 定位表》1 份，包含资料来源、关键词图谱、目标受众画像和 IP 主题定位。</textarea></label>
+                  </div>
+                  <div class="question-block">
+                    <div class="status-line"><span class="tag amber">评价量规</span><span class="tag">30 分</span></div>
+                    <label>评分标准<textarea>文化来源真实 8 分；关键词提炼清晰 8 分；受众分析合理 6 分；IP 定位具有传播价值 8 分。</textarea></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside class="panel">
+              <div class="panel-head">
+                <h3>生成依据</h3>
+                <span class="sub">第 2 次课</span>
+              </div>
+              <div class="panel-body check-list">
+                <div class="check-item">
+                  <strong>教学内容</strong>
+                  <p>文化资料搜集、关键词提炼、受众分析、IP 定位表。</p>
+                </div>
+                <div class="check-item">
+                  <strong>能力指标</strong>
+                  <p>1-3-4、2-3-4、3-5-1。</p>
+                </div>
+                <div class="check-item">
+                  <strong>导出模板</strong>
+                  <p>作业模板已识别标题、任务说明、提交要求、评分标准。</p>
+                </div>
+              </div>
+              <div class="panel-body">
+                <button class="btn primary"><i class="icon" data-lucide="download"></i>导出作业 Word</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="admin">
+          <div class="admin-grid">
+            <div class="panel">
+              <div class="panel-head">
+                <h3>人才培养方案库</h3>
+                <button class="btn"><i class="icon" data-lucide="upload"></i>上传</button>
+              </div>
+              <div class="panel-body library-list">
+                <div class="library-item">
+                  <strong>数字媒体艺术设计 · 2025 版</strong>
+                  <p>147 个表格，已抽取知识能力素养集和课程对应关系。</p>
+                  <div class="status-line"><span class="tag green">已入库</span><span class="tag">21 个培养规格</span></div>
+                </div>
+                <div class="library-item">
+                  <strong>视觉传达设计 · 2024 版</strong>
+                  <p>等待管理员确认课程与能力指标映射。</p>
+                  <div class="status-line"><span class="tag amber">待确认</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h3>课程标准库</h3>
+                <button class="btn"><i class="icon" data-lucide="upload"></i>上传</button>
+              </div>
+              <div class="panel-body library-list">
+                <div class="library-item">
+                  <strong>人工智能与创意设计</strong>
+                  <p>M1-M4 已绑定 9 个知识能力素养代码。</p>
+                  <div class="status-line"><span class="tag green">可用</span></div>
+                </div>
+                <div class="library-item">
+                  <strong>UI 界面设计</strong>
+                  <p>模板字段完整，课程目标待复核。</p>
+                  <div class="status-line"><span class="tag amber">待复核</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h3>模板库</h3>
+                <button class="btn"><i class="icon" data-lucide="plus"></i>新增</button>
+              </div>
+              <div class="panel-body library-list">
+                <div class="library-item">
+                  <strong>课程实施大纲模板</strong>
+                  <p>含日期、周次、节次、教学内容、课程思政、学习任务字段。</p>
+                  <div class="status-line"><span class="tag">12 个占位符</span><span class="tag green">推荐</span></div>
+                </div>
+                <div class="library-item">
+                  <strong>教案模板</strong>
+                  <p>含教学基本情况、K 目标、教学实施过程、教学反思。</p>
+                  <div class="status-line"><span class="tag">15 个占位符</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h3>AI 与校历配置</h3>
+                <button class="btn"><i class="icon" data-lucide="save"></i>保存</button>
+              </div>
+              <div class="panel-body">
+                <div class="form-grid">
+                  <label>模型<select><option>外部大模型 API</option></select></label>
+                  <label>调用日志<select><option>保存摘要</option><option>保存全文</option><option>不保存正文</option></select></label>
+                  <label>校历版本<input value="2026-2027 第一学期"></label>
+                  <label>数据提示<input value="上传前请确认材料不含涉密或隐私信息"></label>
+                </div>
+                <div style="height:12px;"></div>
+                <div class="check-list">
+                  <div class="check-item">
+                    <strong>节假日规则</strong>
+                    <p>国庆周、考试周、实践周已配置，可在课程实施大纲中标记冲突。</p>
+                  </div>
+                  <div class="check-item warn">
+                    <strong>API Key</strong>
+                    <p>当前未在原型中显示密钥，正式系统需由管理员配置。</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const pageMeta = {
+      dashboard: ["教师工作台", "上传资料和模板，生成 Word 初稿，可网页修改，也可导出后到 WPS/Office 修改"],
+      "new-task": ["新建备课任务", "先填写课程信息，再上传课程标准、课表和 Word 模板"],
+      outline: ["课程实施大纲", "确认上课日期、课次和教学内容，导出后仍可在 Word 中修改"],
+      lesson: ["教案生成", "按定稿课程实施大纲生成单次课教案或整门课教案合集"],
+      assessment: ["作业/试卷生成", "按某次课生成作业或试卷，确认后导出 Word"],
+      admin: ["标准库与模板库", "管理员维护人才培养方案、课程标准、公共模板、校历和 AI 配置"]
+    };
+
+    function activate(viewId) {
+      document.querySelectorAll(".view").forEach((view) => {
+        view.classList.toggle("active", view.id === viewId);
+      });
+      document.querySelectorAll(".nav button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.view === viewId);
+      });
+      const meta = pageMeta[viewId] || pageMeta.dashboard;
+      document.getElementById("page-title").textContent = meta[0];
+      document.getElementById("page-subtitle").textContent = meta[1];
+      document.querySelectorAll("[data-actions]").forEach((group) => {
+        group.hidden = group.dataset.actions !== viewId;
+      });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    document.querySelectorAll("[data-view], [data-view-jump]").forEach((button) => {
+      button.addEventListener("click", () => {
+        activate(button.dataset.view || button.dataset.viewJump);
+      });
+    });
+
+    document.querySelectorAll(".lesson-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        document.querySelectorAll(".lesson-item").forEach((other) => other.classList.remove("active"));
+        item.classList.add("active");
+      });
+    });
+
+    document.querySelectorAll(".segmented button").forEach((button) => {
+      button.addEventListener("click", () => {
+        button.parentElement.querySelectorAll("button").forEach((other) => other.classList.remove("active"));
+        button.classList.add("active");
+      });
+    });
+
+    if (window.lucide) {
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

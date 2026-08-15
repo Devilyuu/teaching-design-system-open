@@ -1,0 +1,66 @@
+# School materials never enter this repository: course standards, talent plans,
+# timetables, lesson plans. Every school's are its own.
+cankao/
+*.doc
+*.docx
+*.pdf
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+# Exception: the desensitised template that documents the C00000 red-text
+# contract the exporter is written against.
+!templates/*.docx
+
+# Generated outputs
+rendered_ai_lesson_plan/
+__pycache__/
+*.pyc
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+
+# Legacy one-off generation scripts that embed school lesson content
+build_ai_creative_design_lesson_plan.py
+build_lesson_plan_from_exact_template.py
+
+# Local agent and acceptance-test artifacts
+.superpowers/
+uat/
+task_plan.md
+findings.md
+progress.md
+
+# Office temporary files
+~$*
+
+# Prototype QA captures
+docs/prototypes/screenshots/
+
+# App runtime artifacts
+/uploads/
+apps/api/.venv/
+apps/api/.pytest_cache/
+apps/api/*.egg-info/
+apps/api/*.db
+apps/api/uploads/
+apps/api/generated/
+
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.vite/
+apps/web/*.tsbuildinfo
+
+# Local editor and agent settings
+.claude/settings.local.json
+.codex/
+.DS_Store
+Thumbs.db

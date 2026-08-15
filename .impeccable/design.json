@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-04T16:00:00+08:00",
+  "title": "Design System: 智能备课文档生成系统",
+  "extensions": {
+    "colorMeta": {
+      "institutional-blue": { "role": "primary", "displayName": "院校蓝", "canonical": "#2452C7", "tonalRamp": ["#0B173F", "#132867", "#1B3D99", "#2452C7", "#5379D4", "#86A2E3", "#BDD0F2", "#EDF3FF"] },
+      "canvas-mist": { "role": "neutral", "displayName": "雾蓝画布", "canonical": "#EEF3FB", "tonalRamp": ["#18202D", "#303C4D", "#526176", "#7E8CA0", "#AAB6C6", "#CBD5E2", "#E3EAF3", "#F6F9FD"] },
+      "attention-orange": { "role": "secondary", "displayName": "批注橙", "canonical": "#FF6B2B", "tonalRamp": ["#3A1304", "#6D260A", "#A43D12", "#D8531B", "#FF6B2B", "#FF9467", "#FFC2A9", "#FFF1E9"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "页面标题", "purpose": "页面和课程的唯一一级标题。" },
+      "title": { "displayName": "分区标题", "purpose": "内容分区、面板和字段组标题。" },
+      "body": { "displayName": "正文", "purpose": "表单、说明和文档内容。" },
+      "label": { "displayName": "标签", "purpose": "字段标签、元数据和状态辅助信息。" }
+    },
+    "shadows": [
+      { "name": "overlay", "value": "0 4px 8px rgba(31, 67, 179, 0.12)", "purpose": "菜单、对话框和浮动确认层。" },
+      { "name": "auth", "value": "0 8px 24px rgba(31, 67, 179, 0.10)", "purpose": "登录页唯一抬升表面。" }
+    ],
+    "motion": [
+      { "name": "state", "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "按钮、导航、标签和输入状态变化。" },
+      { "name": "reduced", "value": "0ms", "purpose": "prefers-reduced-motion 下移除非必要过渡。" }
+    ],
+    "breakpoints": [
+      { "name": "mobile", "value": "760px" },
+      { "name": "compact-desktop", "value": "1120px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "每个工作区唯一的下一步操作。",
+      "html": "<button class=\"ds-btn-primary\">继续生成</button>",
+      "css": ".ds-btn-primary{height:36px;padding:8px 14px;border:0;border-radius:4px;background:var(--blue,#2452C7);color:#fff;font:600 14px/1.4 sans-serif;transition:background 180ms cubic-bezier(.16,1,.3,1)}.ds-btn-primary:hover{background:#1F43B3}.ds-btn-primary:focus-visible{outline:2px solid #2452C7;outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "查看、返回、替换和次级保存。",
+      "html": "<button class=\"ds-btn-secondary\">查看详情</button>",
+      "css": ".ds-btn-secondary{height:36px;padding:8px 14px;border:1px solid #D5DEED;border-radius:4px;background:#fff;color:#1E2430;font:500 14px/1.4 sans-serif;transition:border-color 180ms cubic-bezier(.16,1,.3,1)}.ds-btn-secondary:hover{border-color:#86A2E3;color:#1F43B3}.ds-btn-secondary:focus-visible{outline:2px solid #2452C7;outline-offset:2px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "带永久标签的标准表单字段。",
+      "html": "<label class=\"ds-field\"><span>课程名称</span><input value=\"人工智能基础\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;color:#56647A;font:500 12px/1.4 sans-serif}.ds-field input{height:40px;padding:9px 10px;border:1px solid #D5DEED;border-radius:4px;background:#fff;color:#1E2430;font:400 14px/1.4 sans-serif}.ds-field input:focus-visible{border-color:#2452C7;outline:2px solid rgba(36,82,199,.18);outline-offset:0}"
+    },
+    {
+      "name": "Active Navigation",
+      "kind": "nav",
+      "refersTo": "navigation-active",
+      "description": "雾蓝侧栏中的白色活动项。",
+      "html": "<nav class=\"ds-nav\"><button>我的课程</button><button class=\"is-active\">课程资料</button><button>生成记录</button></nav>",
+      "css": ".ds-nav{width:190px;padding:8px;background:#E4ECF7;display:grid;gap:4px}.ds-nav button{padding:9px 10px;border:0;border-radius:6px;background:transparent;color:#56647A;text-align:left;font:500 14px/1.4 sans-serif}.ds-nav button.is-active{background:#fff;color:#1F43B3;font-weight:600}.ds-nav button:focus-visible{outline:2px solid #2452C7;outline-offset:1px}"
+    },
+    {
+      "name": "Status Tag",
+      "kind": "chip",
+      "refersTo": "status-tag",
+      "description": "文字与颜色共同表达状态。",
+      "html": "<span class=\"ds-tag\">已就绪</span>",
+      "css": ".ds-tag{display:inline-flex;align-items:center;min-height:24px;padding:3px 8px;border-radius:999px;background:#EBF7F1;color:#168052;font:500 12px/1.4 sans-serif}"
+    },
+    {
+      "name": "Work Surface",
+      "kind": "card",
+      "description": "承载可编辑内容的平坦工作面。",
+      "html": "<section class=\"ds-surface\"><h3>课程资料</h3><p>5 项资料中已有 4 项就绪。</p></section>",
+      "css": ".ds-surface{padding:16px;border:1px solid #E9EDF5;border-radius:6px;background:#fff;color:#1E2430}.ds-surface h3{margin:0 0 6px;font:600 16px/1.4 sans-serif}.ds-surface p{margin:0;color:#56647A;font:400 14px/1.6 sans-serif}"
+    }
+  ],
+  "narrative": {
+    "northStar": "蓝图工作台",
+    "overview": "界面像一张被整理好的教学蓝图：结构先于装饰，依据与状态始终可追溯，教师可以迅速判断当前进度和下一步动作。设计服务于连续数小时的桌面备课，不追求营销式惊艳。",
+    "keyCharacteristics": ["雾蓝负责区域分层，白色负责工作内容。", "每页一个当前主任务。", "依靠间距、分隔线和标题层级组织信息。", "AI 是可解释、可中断、可重试的流程能力。"],
+    "rules": [
+      { "name": "Chromatic Zoning", "body": "蓝色通过导航、画布和选中区形成区域层级；禁止把所有表面都做成白色，再靠阴影区分。", "section": "colors" },
+      { "name": "One Primary Action", "body": "每个页面或独立工作区只允许一个视觉最强的院校蓝按钮。", "section": "colors" },
+      { "name": "Flat by Default", "body": "静态内容面默认无阴影。", "section": "elevation" }
+    ],
+    "dos": ["使用雾蓝导航和画布建立分区。", "在每个页面顶部同时说明当前状态、下一步和原因。", "为所有交互组件建立完整状态。"],
+    "donts": ["不做营销型 AI 产品。", "不做沉重政务后台。", "不把每段内容包进卡片。", "不隐藏生成依据、失败原因或下一步操作。"]
+  }
+}
