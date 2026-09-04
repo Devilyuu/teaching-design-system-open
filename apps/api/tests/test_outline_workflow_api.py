@@ -1168,3 +1168,31 @@ def test_task_list_returns_material_and_generation_progress(tmp_path, monkeypatc
     assert "next_session_date" in task
     assert "next_session_weekday" in task
     assert "next_session_periods" in task
+
+
+def test_course_standard_without_project_table_is_rejected_at_upload(tmp_path):
+    # Marking a goals-only standard "ready" and failing at outline generation
+    # sent teachers hunting in the wrong place; reject it with the fix spelled out.
+    standard = tmp_path / "goals-only-standard.docx"
+    doc = Document()
+    table = doc.add_table(rows=2, cols=3)
+    table.cell(0, 0).text = "编号"
+    table.cell(0, 1).text = "课程教学目标"
+    table.cell(0, 2).text = "对应的知识能力素养集"
+    table.cell(1, 0).text = "M1"
+    table.cell(1, 1).text = "理解基础"
+    table.cell(1, 2).text = "1-3-4"
+    doc.save(standard)
+
+    with TestClient(app) as client:
+        task_id = create_task(client)
+        with standard.open("rb") as file:
+            response = client.post(
+                f"/tasks/{task_id}/course-standard",
+                files={"file": ("standard.docx", file, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+            )
+        readiness = client.get(f"/tasks/{task_id}/readiness").json()
+
+    assert response.status_code == 400
+    assert "参考课时" in response.json()["detail"]
+    assert readiness["materials"]["course_standard"]["status"] == "missing"

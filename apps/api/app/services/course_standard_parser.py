@@ -6,7 +6,10 @@ from docx import Document
 
 ABILITY_CODE_RE = re.compile(r"\d+-\d+-\d+")
 GOAL_CODE_RE = re.compile(r"M\d+")
-REFERENCE_HOURS_RE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
+# Schools write the hours column either as "理论/实践" (8/4) or as a bare total
+# (12). Only the total is load-bearing downstream (it must sum to the course
+# hours), so a bare number is accepted and the practice split recorded as unknown.
+REFERENCE_HOURS_RE = re.compile(r"^(\d+)(?:\s*/\s*(\d+))?\s*(?:学时|课时)?$")
 
 
 @dataclass(frozen=True)
@@ -86,7 +89,7 @@ def parse_course_standard(path: Path | str) -> ParsedCourseStandard:
                         course_goal_codes=list(dict.fromkeys(GOAL_CODE_RE.findall(code_text))),
                         ability_codes=list(dict.fromkeys(ABILITY_CODE_RE.findall(code_text))),
                         reference_hours=int(hours_match.group(1)),
-                        practice_hours=int(hours_match.group(2)),
+                        practice_hours=int(hours_match.group(2) or 0),
                     )
                 )
                 continue

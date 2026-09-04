@@ -76,7 +76,7 @@ docs/        需求、设计、部署、适配文档
 ## 开发
 
 ```bash
-cd apps/api && pytest              # 293 项，改后端必跑
+cd apps/api && pytest              # 295 项，改后端必跑
 cd apps/web && npm test -- --run   # 80 项
 ```
 

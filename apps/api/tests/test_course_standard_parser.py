@@ -81,3 +81,29 @@ def test_parse_teaching_projects_and_merge_description_rows(tmp_path):
     assert result.projects[0].ability_codes == ["1-3-4", "2-3-4"]
     assert result.projects[0].description == "本项目为入门阶段。"
     assert result.projects[1].reference_hours == 24
+
+
+def test_parse_projects_when_hours_column_is_a_bare_total(tmp_path):
+    # Some schools write "12" instead of "8/4"; the outline only needs the total.
+    path = tmp_path / "total-hours-standard.docx"
+    doc = Document()
+    table = doc.add_table(rows=4, cols=7)
+    headers = ["项目名称", "教学内容", "教学方法建议", "教学目标", "知识能力素养集", "知识能力素养集", "参考课时"]
+    for index, header in enumerate(headers):
+        table.cell(0, index).text = header
+    rows = [
+        ["项目一：节日海报", "掌握动态海报表现方法", "讲授 练习", "M1", "1-1-3", "1-1-3", "12"],
+        ["项目二：综合应用", "完成设计稿制作", "讲授 分组合作", "M3 M4", "1-4-5 3-1-4", "1-4-5 3-1-4", "36 学时"],
+        ["合计", "合计", "合计", "合计", "合计", "合计", "48"],
+    ]
+    for row_index, values in enumerate(rows, start=1):
+        for column_index, value in enumerate(values):
+            table.cell(row_index, column_index).text = value
+    doc.save(path)
+
+    result = parse_course_standard(path)
+
+    assert [project.name for project in result.projects] == ["项目一：节日海报", "项目二：综合应用"]
+    assert [project.reference_hours for project in result.projects] == [12, 36]
+    assert [project.practice_hours for project in result.projects] == [0, 0]
+    assert result.projects[1].course_goal_codes == ["M3", "M4"]

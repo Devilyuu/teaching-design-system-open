@@ -101,7 +101,9 @@ def build_outline_evidence(task, projects, goals, indicators, sessions) -> Outli
             "course_goal_codes": _codes(project.course_goal_codes),
             "ability_codes": _codes(project.ability_codes),
             "reference_hours": project.reference_hours,
-            "practice_hours": project.practice_hours,
+            # 0 means the course standard gave only a total; tell the model
+            # "unknown" rather than "no practice".
+            "practice_hours": project.practice_hours or None,
         }
         for project in projects
     ]
