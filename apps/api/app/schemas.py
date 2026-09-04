@@ -67,6 +67,20 @@ class TeachingTaskCreate(BaseModel):
     hours_per_session: int = 4
 
 
+class TeachingTaskUpdate(BaseModel):
+    """Every field is optional: the form sends only what the teacher changed."""
+
+    major_id: int | None = None
+    term: str | None = None
+    major: str | None = None
+    class_name: str | None = None
+    course_name: str | None = None
+    teacher_name: str | None = None
+    location: str | None = None
+    total_hours: int | None = None
+    hours_per_session: int | None = None
+
+
 class TeachingTaskRead(TeachingTaskCreate):
     id: int
     owner_id: int | None = None

@@ -23,6 +23,7 @@ import {
   createMajor,
   createTask,
   createUser,
+  deleteTask,
   exportLessonPlans,
   exportOutline,
   getCurrentUser,
@@ -39,6 +40,7 @@ import {
   rejectOutlineRevisionCandidate,
   resetUserPassword,
   updateLessonPlan,
+  updateTask,
   updateOutlineRow
 } from "./api";
 import type { CurrentUser, LessonPlan, Major, ManagedUser, OutlineRevisionCandidate, OutlineRevisionField, OutlineRow, SourceReview, TeachingTask, TeachingTaskCreate } from "./types";
@@ -246,6 +248,23 @@ export default function App() {
     activate("course");
   }
 
+  async function handleUpdateTask(taskId: number, payload: Partial<TeachingTaskCreate>) {
+    setError("");
+    const updated = await updateTask(taskId, payload);
+    setTasks((current) => current.map((task) => (task.id === updated.id ? updated : task)));
+    setNotice("课程信息已保存");
+  }
+
+  async function handleDeleteTask(taskId: number) {
+    setError("");
+    await deleteTask(taskId);
+    setTasks((current) => current.filter((task) => task.id !== taskId));
+    setSelectedTaskId(null);
+    setView("courses");
+    setNotice("课程已删除");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
@@ -449,7 +468,16 @@ export default function App() {
           )}
           {view === "course" && selectedTask && (
             <CourseWorkspaceHeader task={selectedTask} tab={workspaceTab} onTabChange={setWorkspaceTab}>
-              {workspaceTab === "overview" && <CourseOverview task={selectedTask} onOpenTab={setWorkspaceTab} />}
+              {workspaceTab === "overview" && (
+                <CourseOverview
+                  key={selectedTask.id}
+                  task={selectedTask}
+                  onOpenTab={setWorkspaceTab}
+                  onUpdate={(payload) => handleUpdateTask(selectedTask.id, payload)}
+                  onDelete={() => handleDeleteTask(selectedTask.id)}
+                  onError={setError}
+                />
+              )}
               {workspaceTab === "materials" && (
                 <CourseMaterialsPage
                   task={selectedTask}
@@ -863,8 +891,68 @@ function CourseWorkspaceHeader({
   );
 }
 
-function CourseOverview({ task, onOpenTab }: { task: TeachingTask; onOpenTab: (tab: WorkspaceTab) => void }) {
+type CourseSettingsDraft = Pick<TeachingTaskCreate, "course_name" | "class_name" | "major" | "location" | "total_hours" | "hours_per_session">;
+
+function settingsDraftOf(task: TeachingTask): CourseSettingsDraft {
+  return {
+    course_name: task.course_name,
+    class_name: task.class_name,
+    major: task.major,
+    location: task.location,
+    total_hours: task.total_hours,
+    hours_per_session: task.hours_per_session
+  };
+}
+
+function CourseOverview({
+  task,
+  onOpenTab,
+  onUpdate,
+  onDelete,
+  onError
+}: {
+  task: TeachingTask;
+  onOpenTab: (tab: WorkspaceTab) => void;
+  onUpdate: (payload: Partial<TeachingTaskCreate>) => Promise<void>;
+  onDelete: () => Promise<void>;
+  onError: (message: string) => void;
+}) {
   const expectedSessions = Math.ceil(task.total_hours / task.hours_per_session);
+  const [draft, setDraft] = useState<CourseSettingsDraft>(() => settingsDraftOf(task));
+  const [saving, setSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const changed = Object.fromEntries(
+    (Object.keys(draft) as Array<keyof CourseSettingsDraft>)
+      .filter((key) => draft[key] !== task[key])
+      .map((key) => [key, draft[key]])
+  ) as Partial<TeachingTaskCreate>;
+  const hasChanges = Object.keys(changed).length > 0;
+
+  async function saveSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!hasChanges) return;
+    setSaving(true);
+    try {
+      await onUpdate(changed);
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : "课程信息保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    setDeleting(true);
+    try {
+      await onDelete();
+    } catch (reason) {
+      onError(reason instanceof Error ? reason.message : "课程删除失败");
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="dashboard-focus">
       <Panel title="课程准备进度" sub={`${task.completed_sessions_count ?? 0}/${task.session_count ?? expectedSessions} 次课已完成`}>
@@ -880,6 +968,41 @@ function CourseOverview({ task, onOpenTab }: { task: TeachingTask; onOpenTab: (t
           <button className="btn" onClick={() => onOpenTab("lessons")}>整门课教案</button>
           <button className="btn primary" onClick={() => onOpenTab("sessions")}>进入下一次课</button>
         </div>
+      </Panel>
+      <Panel title="课程信息" sub="修改后只影响课程档案，已生成的大纲和教案不会改写">
+        <form className="course-settings-form" onSubmit={saveSettings} aria-label="课程信息">
+          <div className="form-grid">
+            <TextField label="课程名称" value={draft.course_name} onChange={(course_name) => setDraft({ ...draft, course_name })} />
+            <TextField label="班级" value={draft.class_name} onChange={(class_name) => setDraft({ ...draft, class_name })} />
+            <TextField label="专业" value={draft.major} onChange={(major) => setDraft({ ...draft, major })} />
+            <TextField label="上课地点" value={draft.location} onChange={(location) => setDraft({ ...draft, location })} />
+            <NumberField label="课程总学时" value={draft.total_hours} onChange={(total_hours) => setDraft({ ...draft, total_hours })} />
+            <NumberField label="每次课学时" value={draft.hours_per_session} onChange={(hours_per_session) => setDraft({ ...draft, hours_per_session })} />
+          </div>
+          <div className="form-actions">
+            <button className="btn primary" type="submit" disabled={!hasChanges || saving}>
+              <Save className="icon" />{saving ? "保存中" : "保存课程信息"}
+            </button>
+          </div>
+        </form>
+      </Panel>
+      <Panel title="删除课程" sub="连同课程资料、大纲、教案和导出记录一起删除" className="course-danger">
+        {confirmingDelete ? (
+          <div className="course-danger-confirm" role="alertdialog" aria-label="确认删除课程">
+            <p>
+              将删除「{task.course_name}」及其课程标准、人才培养方案、课表、课程实施大纲、教案、作业试卷和导出记录，
+              删除后无法恢复。已导出到本地的 Word 文件不受影响。
+            </p>
+            <div className="course-danger-actions">
+              <button className="btn danger" disabled={deleting} onClick={() => void confirmDelete()}>{deleting ? "删除中" : "确认删除"}</button>
+              <button className="btn" disabled={deleting} onClick={() => setConfirmingDelete(false)}>取消</button>
+            </div>
+          </div>
+        ) : (
+          <div className="course-danger-actions">
+            <button className="btn danger" onClick={() => setConfirmingDelete(true)}>删除课程</button>
+          </div>
+        )}
       </Panel>
     </div>
   );

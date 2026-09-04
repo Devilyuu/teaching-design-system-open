@@ -106,6 +106,33 @@ def _norm_header(value) -> str:
     return _norm(value).replace(" ", "").rstrip(":：")
 
 
+def _course_key(value: str) -> str:
+    return _norm(value).replace(" ", "")
+
+
+def select_course_names(available: list[str], wanted: str) -> list[str]:
+    """Pick which of the timetable's course names stand for the course record.
+
+    The registrar rarely spells a course exactly the way the teacher typed it
+    when creating the course (「高等数学（一）」 vs 「高等数学」, a stray space,
+    full-width brackets), and an exact comparison used to throw the whole
+    timetable away. Exact matches still win outright: only when there is none
+    does a substring in either direction count, so choosing 「网页设计」 from a
+    timetable that also lists 「网页设计实训」 keeps just the one course.
+    """
+    target = _course_key(wanted)
+    if not target:
+        return list(available)
+    exact = [name for name in available if _course_key(name) == target]
+    if exact:
+        return exact
+    return [
+        name
+        for name in available
+        if target in _course_key(name) or _course_key(name) in target
+    ]
+
+
 def _normalize_periods(raw: str) -> tuple[str, int]:
     numbers = [int(item) for item in re.findall(r"\d+", raw)]
     if not numbers:
@@ -211,9 +238,10 @@ def _from_registrar_matrix(
     # A teacher's timetable holds every course they teach, so the raw list also
     # names teaching classes belonging to other courses -- offering those would
     # only produce an empty schedule.
+    matched_courses = select_course_names(parsed.course_names, course_name or "")
     relevant = [
         item for item in parsed.teaching_classes
-        if not course_name or item.startswith(course_name)
+        if not course_name or any(item.startswith(name) for name in matched_courses)
     ]
     warnings: list[str] = []
     if not teaching_class and len(relevant) > 1:
@@ -316,14 +344,11 @@ def analyze_schedule(
             course_names.append(name)
 
     if course_name:
-        wanted = _norm(course_name)
+        wanted = set(select_course_names(course_names, course_name))
         raw_rows = [
             values
             for values in raw_rows
-            if not values.get("course_name")
-            or values["course_name"] == wanted
-            or wanted in values["course_name"]
-            or values["course_name"] in wanted
+            if not values.get("course_name") or values["course_name"] in wanted
         ]
 
     if "weekday" not in matches:

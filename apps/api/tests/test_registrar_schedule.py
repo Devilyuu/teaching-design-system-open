@@ -142,6 +142,36 @@ def test_keeps_only_the_requested_course():
     assert result.sessions[0].course_name == "移动终端APP设计"
 
 
+def test_tolerates_the_registrar_spelling_the_course_differently():
+    """建课程时写「移动终端APP设计」，教务写「移动终端APP设计（一）」，不该整张课表作废。"""
+    sheet = make_matrix([
+        ["节次", "", "星期一", "星期二"],
+        ["上午", "一",
+         "移动终端APP设计（一）/(1-2节)1周/A101/张明/移动终端APP设计（一）-0003//数字艺术2431/ /多媒体",
+         "劳动教育/(1-2节)1周/操场3/张明/劳动教育-0095//数字艺术2433/ /操场"],
+        ["注 本学期2026-03-02正式上课至2026-07-05结束，共18周."],
+    ])
+
+    result = parse_registrar_matrix(sheet, course_name="移动终端APP设计")
+
+    assert [item.course_name for item in result.sessions] == ["移动终端APP设计（一）"]
+
+
+def test_prefers_the_exact_course_over_a_lookalike():
+    """课表里同时有「网页设计」和「网页设计实训」时，选前者不该把后者也带进来。"""
+    sheet = make_matrix([
+        ["节次", "", "星期一", "星期二"],
+        ["上午", "一",
+         "网页设计/(1-2节)1周/A101/张明/网页设计-0001//数字艺术2431/ /多媒体",
+         "网页设计实训/(1-2节)1周/A102/张明/网页设计实训-0001//数字艺术2431/ /多媒体"],
+        ["注 本学期2026-03-02正式上课至2026-07-05结束，共18周."],
+    ])
+
+    result = parse_registrar_matrix(sheet, course_name="网页设计")
+
+    assert [item.course_name for item in result.sessions] == ["网页设计"]
+
+
 def test_requires_the_semester_start_date():
     sheet = make_matrix([
         ["节次", "", "星期一"],

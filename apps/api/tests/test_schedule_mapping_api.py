@@ -348,3 +348,53 @@ def test_remap_rejects_a_mapping_that_cannot_be_parsed(tmp_path):
 
     assert response.status_code == 400
     assert response.json()["detail"]["missing_fields"] == ["periods"]
+
+
+def test_names_the_courses_on_the_sheet_when_none_matches_the_task(tmp_path):
+    """课程名对不上时，报错要把课表里的课程列出来，教师才有下一步可走。"""
+    path = tmp_path / "schedule.xlsx"
+    write_rows(
+        path,
+        [
+            ["教学周", "上课日期", "星期几", "节次", "课程名称", "教学班", "上课教室"],
+            [1, "2026-09-07", "星期一", "第1-4节", "版式设计", "数字艺术25级1班", "A301"],
+            [2, "2026-09-14", "星期一", "第1-4节", "劳动教育", "数字艺术25级1班", "操场"],
+        ],
+    )
+    with TestClient(app) as client:
+        task_id = create_task(client)
+        with path.open("rb") as handle:
+            response = client.post(
+                f"/tasks/{task_id}/schedule-candidates",
+                files={"file": ("schedule.xlsx", handle, "application/octet-stream")},
+            )
+
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["course_names"] == ["版式设计", "劳动教育"]
+    assert "人工智能与创意设计" in detail["message"]
+    assert "版式设计" in detail["message"]
+
+
+def test_accepts_a_course_chosen_from_the_sheet(tmp_path):
+    path = tmp_path / "schedule.xlsx"
+    write_rows(
+        path,
+        [
+            ["教学周", "上课日期", "星期几", "节次", "课程名称", "教学班", "上课教室"],
+            [1, "2026-09-07", "星期一", "第1-4节", "版式设计", "数字艺术25级1班", "A301"],
+            [2, "2026-09-14", "星期一", "第1-4节", "劳动教育", "数字艺术25级1班", "操场"],
+        ],
+    )
+    with TestClient(app) as client:
+        task_id = create_task(client)
+        with path.open("rb") as handle:
+            response = client.post(
+                f"/tasks/{task_id}/schedule-candidates",
+                data={"course_name": "版式设计"},
+                files={"file": ("schedule.xlsx", handle, "application/octet-stream")},
+            )
+
+    assert response.status_code == 200
+    assert response.json()["session_count"] == 1
+    assert response.json()["course_filter"] == "版式设计"

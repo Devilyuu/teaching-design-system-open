@@ -9,6 +9,7 @@ const getCourseReadiness = vi.fn();
 const remapScheduleCandidate = vi.fn();
 const confirmScheduleCandidate = vi.fn();
 const discardScheduleCandidate = vi.fn();
+const uploadScheduleCandidate = vi.fn();
 
 vi.mock("./api", () => ({
   getCourseReadiness: (...args: unknown[]) => getCourseReadiness(...args),
@@ -19,7 +20,7 @@ vi.mock("./api", () => ({
   generateOutline: vi.fn(),
   resolveReviewNotice: vi.fn(),
   uploadCourseStandard: vi.fn(),
-  uploadScheduleCandidate: vi.fn(),
+  uploadScheduleCandidate: (...args: unknown[]) => uploadScheduleCandidate(...args),
   uploadTalentPlan: vi.fn(),
   uploadTemplate: vi.fn()
 }));
@@ -282,4 +283,41 @@ it("keeps confirmation available and reports the change summary", async () => {
   await user.click(within(panel).getByRole("button", { name: "确认使用新课表" }));
 
   expect(confirmScheduleCandidate).toHaveBeenCalledWith(1, 5);
+});
+
+it("offers the courses the timetable does list when none matches the course record", async () => {
+  const user = userEvent.setup();
+  Element.prototype.scrollIntoView = vi.fn();
+  uploadScheduleCandidate
+    .mockRejectedValueOnce(Object.assign(
+      new Error("课表里没有和「人工智能与创意设计」对应的课次。课表中识别到的课程：版式设计、劳动教育。"),
+      { courseNames: ["版式设计", "劳动教育"] }
+    ))
+    .mockResolvedValueOnce(candidate);
+  const onError = vi.fn();
+  render(<CourseMaterialsPage task={task} onOpenOutline={vi.fn()} onError={onError} />);
+
+  const file = new File(["x"], "课表.xlsx", { type: "application/octet-stream" });
+  await user.upload(await screen.findByLabelText("上传教务课表"), file);
+
+  const alert = await screen.findByRole("alert", { name: "课表课程名不一致" });
+  expect(alert).toHaveTextContent("课表中识别到的课程：版式设计、劳动教育");
+  expect(onError).not.toHaveBeenCalled();
+
+  await user.click(within(alert).getByRole("button", { name: "按「版式设计」导入" }));
+
+  expect(uploadScheduleCandidate).toHaveBeenLastCalledWith(1, file, { course_name: "版式设计" });
+  expect(screen.queryByRole("alert", { name: "课表课程名不一致" })).not.toBeInTheDocument();
+});
+
+it("still reports other upload failures through the page error", async () => {
+  const user = userEvent.setup();
+  uploadScheduleCandidate.mockRejectedValueOnce(new Error("课表缺少必需的列：节次。"));
+  const onError = vi.fn();
+  render(<CourseMaterialsPage task={task} onOpenOutline={vi.fn()} onError={onError} />);
+
+  await user.upload(await screen.findByLabelText("上传教务课表"), new File(["x"], "课表.xlsx"));
+
+  expect(onError).toHaveBeenCalledWith("课表缺少必需的列：节次。");
+  expect(screen.queryByRole("alert", { name: "课表课程名不一致" })).not.toBeInTheDocument();
 });

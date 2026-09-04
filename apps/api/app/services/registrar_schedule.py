@@ -10,6 +10,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 import re
 
+from app.services.schedule_parser import select_course_names
+
 
 WEEKDAY_CHARS = ("一", "二", "三", "四", "五", "六", "日")
 WEEKDAY_HEADERS = tuple(f"星期{char}" for char in WEEKDAY_CHARS)
@@ -187,7 +189,7 @@ def parse_registrar_matrix(
         raise RegistrarParseError("课表中没有开学日期，无法把周次换算成上课日期")
     header_index, weekday_columns = _find_weekday_columns(rows)
 
-    raw: list[RegistrarSession] = []
+    entries: list[tuple[CellEntry, int]] = []
     courses: list[str] = []
     classes: list[str] = []
     for row in rows[header_index + 1 :]:
@@ -199,26 +201,35 @@ def parse_registrar_matrix(
                     courses.append(entry.course_name)
                 if entry.teaching_class and entry.teaching_class not in classes:
                     classes.append(entry.teaching_class)
-                if course_name and entry.course_name != course_name:
-                    continue
-                if teaching_class and entry.teaching_class != teaching_class:
-                    continue
-                for week in entry.weeks:
-                    day = term_start + timedelta(weeks=week - 1, days=weekday_index)
-                    numbers = [int(part) for part in re.findall(r"\d+", entry.periods)]
-                    span = max(numbers) - min(numbers) + 1 if numbers else 1
-                    raw.append(
-                        RegistrarSession(
-                            week_no=week,
-                            date_text=day.isoformat(),
-                            weekday=WEEKDAY_CHARS[weekday_index],
-                            periods=entry.periods,
-                            course_name=entry.course_name,
-                            class_name=entry.class_names.split(";")[0].strip(),
-                            location=entry.location,
-                            hours=span,
-                        )
-                    )
+                entries.append((entry, weekday_index))
+
+    # The course record's name and the registrar's spelling are matched only
+    # after every name on the sheet is known, so an exact hit can take priority
+    # over a looser one.
+    wanted = set(select_course_names(courses, course_name or "")) if course_name else None
+
+    raw: list[RegistrarSession] = []
+    for entry, weekday_index in entries:
+        if wanted is not None and entry.course_name not in wanted:
+            continue
+        if teaching_class and entry.teaching_class != teaching_class:
+            continue
+        for week in entry.weeks:
+            day = term_start + timedelta(weeks=week - 1, days=weekday_index)
+            numbers = [int(part) for part in re.findall(r"\d+", entry.periods)]
+            span = max(numbers) - min(numbers) + 1 if numbers else 1
+            raw.append(
+                RegistrarSession(
+                    week_no=week,
+                    date_text=day.isoformat(),
+                    weekday=WEEKDAY_CHARS[weekday_index],
+                    periods=entry.periods,
+                    course_name=entry.course_name,
+                    class_name=entry.class_names.split(";")[0].strip(),
+                    location=entry.location,
+                    hours=span,
+                )
+            )
 
     return RegistrarSchedule(
         sessions=_merge_same_day_periods(raw, periods_per_session),

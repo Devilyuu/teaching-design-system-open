@@ -240,19 +240,29 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
 }) {
   const [readiness, setReadiness] = useState<CourseReadiness | null>(null);
   const [busy, setBusy] = useState("");
+  // The registrar's spelling of the course often differs from the course
+  // record; when nothing on the sheet matched, the file is kept so the teacher
+  // can import it under one of the names the sheet actually uses.
+  const [scheduleMismatch, setScheduleMismatch] = useState<{ file: File; message: string; courseNames: string[] } | null>(null);
 
   async function reload() {
     setReadiness(await getCourseReadiness(task.id));
   }
 
-  useEffect(() => { void reload().catch((error: Error) => onError(error.message)); }, [task.id]);
+  useEffect(() => {
+    setScheduleMismatch(null);
+    void reload().catch((error: Error) => onError(error.message));
+  }, [task.id]);
 
-  async function upload(kind: string, file: File) {
+  async function upload(kind: string, file: File, courseName?: string) {
     setBusy(kind);
     try {
       if (kind === "talent_plan") await uploadTalentPlan(task.id, file);
       if (kind === "course_standard") await uploadCourseStandard(task.id, file);
-      if (kind === "schedule") await uploadScheduleCandidate(task.id, file);
+      if (kind === "schedule") {
+        await uploadScheduleCandidate(task.id, file, courseName === undefined ? undefined : { course_name: courseName });
+        setScheduleMismatch(null);
+      }
       if (kind === "outline_template") await uploadTemplate(task.id, "outline", file);
       if (kind === "lesson_template") await uploadTemplate(task.id, "lesson", file);
       await reload();
@@ -260,6 +270,11 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
       // asks is off-screen; leaving the teacher on the list reads as failure.
       if (kind === "schedule") revealSchedulePanel();
     } catch (error) {
+      const courseNames = (error as { courseNames?: string[] }).courseNames ?? [];
+      if (kind === "schedule" && courseNames.length > 0) {
+        setScheduleMismatch({ file, message: error instanceof Error ? error.message : "课表中没有可用课次", courseNames });
+        return;
+      }
       onError(error instanceof Error ? error.message : "资料上传失败");
     } finally {
       setBusy("");
@@ -343,6 +358,24 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
           })}
         </div>
       </section>
+      {scheduleMismatch && (
+        <div className="inline-alert schedule-mismatch" role="alert" aria-label="课表课程名不一致">
+          <p>{scheduleMismatch.message}</p>
+          <div className="material-row-actions">
+            {scheduleMismatch.courseNames.map((name) => (
+              <button
+                className="btn"
+                key={name}
+                disabled={busy === "schedule"}
+                onClick={() => void upload("schedule", scheduleMismatch.file, name)}
+              >
+                按「{name}」导入
+              </button>
+            ))}
+            <button className="btn" disabled={busy === "schedule"} onClick={() => setScheduleMismatch(null)}>取消</button>
+          </div>
+        </div>
+      )}
       {readiness.pending_schedule && (
         <SchedulePreviewPanel
           taskId={task.id}

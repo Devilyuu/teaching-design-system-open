@@ -58,13 +58,22 @@ export class ApiError extends Error {
   readonly status: number;
   readonly detectedHeaders: string[];
   readonly missingFields: string[];
+  /** Courses the timetable does list, sent back when none of them matched the course record. */
+  readonly courseNames: string[];
 
-  constructor(message: string, status: number, detectedHeaders: string[] = [], missingFields: string[] = []) {
+  constructor(
+    message: string,
+    status: number,
+    detectedHeaders: string[] = [],
+    missingFields: string[] = [],
+    courseNames: string[] = []
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.detectedHeaders = detectedHeaders;
     this.missingFields = missingFields;
+    this.courseNames = courseNames;
   }
 }
 
@@ -75,12 +84,18 @@ async function buildRequestError(response: Response): Promise<Error> {
     const detail = (JSON.parse(text) as { detail?: unknown }).detail;
     if (typeof detail === "string") return new ApiError(detail, response.status);
     if (detail && typeof detail === "object") {
-      const parsed = detail as { message?: string; detected_headers?: string[]; missing_fields?: string[] };
+      const parsed = detail as {
+        message?: string;
+        detected_headers?: string[];
+        missing_fields?: string[];
+        course_names?: string[];
+      };
       return new ApiError(
         parsed.message ?? fallback,
         response.status,
         parsed.detected_headers ?? [],
-        parsed.missing_fields ?? []
+        parsed.missing_fields ?? [],
+        parsed.course_names ?? []
       );
     }
   } catch {
@@ -227,6 +242,17 @@ export function createTask(payload: TeachingTaskCreate): Promise<TeachingTask> {
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export function updateTask(taskId: number, payload: Partial<TeachingTaskCreate>): Promise<TeachingTask> {
+  return request<TeachingTask>(`/tasks/${taskId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteTask(taskId: number): Promise<void> {
+  return request<void>(`/tasks/${taskId}`, { method: "DELETE" });
 }
 
 export function listOutlineRows(taskId: number): Promise<OutlineRow[]> {

@@ -218,6 +218,14 @@ function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean 
       return jsonResponse({ ...tasks[0], id: 2, course_name: "新课程" });
     }
 
+    if (url.endsWith("/tasks/1") && init?.method === "PATCH") {
+      return jsonResponse({ ...tasks[0], ...JSON.parse(String(init.body)) });
+    }
+
+    if (url.endsWith("/tasks/1") && init?.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+
     if (url.endsWith("/tasks/1/readiness") && (!init || init.method === undefined)) {
       return jsonResponse(readiness);
     }
@@ -653,6 +661,44 @@ describe("App", () => {
     expect(screen.getByRole("tab", { name: "课程实施大纲" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "整门课教案" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "课次与材料" })).toBeInTheDocument();
+  });
+
+  it("renames a course from its overview", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "我的课程" }));
+    await user.click(screen.getByRole("button", { name: "进入课程" }));
+    const saveButton = screen.getByRole("button", { name: "保存课程信息" });
+    expect(saveButton).toBeDisabled();
+
+    const field = screen.getByLabelText("课程名称");
+    await user.clear(field);
+    await user.type(field, "人工智能与创意设计（一）");
+    await user.click(saveButton);
+
+    expect(await screen.findByText("课程信息已保存")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "人工智能与创意设计（一）" })).toBeInTheDocument();
+    const patch = vi.mocked(fetch).mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ course_name: "人工智能与创意设计（一）" });
+  });
+
+  it("asks before deleting a course and then returns to the course list", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "我的课程" }));
+    await user.click(screen.getByRole("button", { name: "进入课程" }));
+    await user.click(screen.getByRole("button", { name: "删除课程" }));
+
+    expect(screen.getByRole("alertdialog", { name: "确认删除课程" })).toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "确认删除" }));
+
+    expect(await screen.findByText("课程已删除")).toBeInTheDocument();
+    expect(screen.getByText("共 0 门课程")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "课程概览" })).not.toBeInTheDocument();
   });
 
   it("keeps My Courses selected while working inside a course", async () => {

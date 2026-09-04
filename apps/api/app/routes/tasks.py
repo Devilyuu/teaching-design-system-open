@@ -57,6 +57,7 @@ from app.schemas import (
     ScheduleRemapRequest,
     TeachingTaskCreate,
     TeachingTaskRead,
+    TeachingTaskUpdate,
 )
 from app.services.ai_outline_generation import (
     OutlineEvidenceError,
@@ -110,6 +111,7 @@ from app.services.session_material_exporter import export_session_material_docx
 from app.services.session_material_ai import SessionMaterialValidationError, generate_ai_session_material
 from app.services.source_validation import build_source_review
 from app.services.talent_plan_parser import parse_talent_plan
+from app.services.task_deletion import delete_teaching_task
 from app.services.task_material_store import (
     MaterialUploadError,
     active_asset,
@@ -130,6 +132,14 @@ TEMPLATE_FILES = {
 PUSHABLE_ARTIFACTS = {
     "lesson": "整门课教案",
     "outline": "课程实施大纲",
+}
+FIELD_NAMES_ZH = {
+    "course_name": "课程名称",
+    "class_name": "班级",
+    "major": "专业",
+    "location": "上课地点",
+    "total_hours": "课程总学时",
+    "hours_per_session": "每次课学时",
 }
 
 
@@ -167,6 +177,50 @@ def list_tasks(
         query = query.where(TeachingTask.owner_id == current_user.id)
     tasks = session.exec(query).all()
     return [_task_read(task, session) for task in tasks]
+
+
+@router.patch("/{task_id}", response_model=TeachingTaskRead)
+def update_task(
+    task_id: int,
+    payload: TeachingTaskUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
+    task = _get_task_or_404(task_id, session, current_user)
+    data = payload.model_dump(exclude_unset=True)
+    if "term" in data:
+        data["term"] = normalize_term(data["term"])
+    if data.get("major_id") is not None:
+        major = session.get(Major, data["major_id"])
+        if major is None or not major.is_active:
+            raise HTTPException(status_code=400, detail="Major not found")
+        data["major"] = major.name
+    # Same rule as creation: a teacher's courses carry their own name.
+    if current_user.role == "teacher":
+        data.pop("teacher_name", None)
+    for name in ("course_name", "class_name", "major", "location"):
+        if name in data and not str(data[name]).strip():
+            raise HTTPException(status_code=400, detail=f"{FIELD_NAMES_ZH[name]}不能为空")
+    for name in ("total_hours", "hours_per_session"):
+        if name in data and (data[name] is None or data[name] < 1):
+            raise HTTPException(status_code=400, detail=f"{FIELD_NAMES_ZH[name]}必须大于 0")
+    for name, value in data.items():
+        setattr(task, name, value.strip() if isinstance(value, str) else value)
+    session.add(task)
+    session.commit()
+    session.refresh(task)
+    return _task_read(task, session)
+
+
+@router.delete("/{task_id}", status_code=204)
+def delete_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Response:
+    task = _get_task_or_404(task_id, session, current_user)
+    delete_teaching_task(session, task, TASK_FILE_DIR)
+    return Response(status_code=204)
 
 
 @router.get("/{task_id}/readiness", response_model=CourseReadinessRead)
@@ -277,6 +331,17 @@ async def upload_course_standard(
 
     if not parsed.goals:
         raise HTTPException(status_code=400, detail="Course standard goals are required")
+    # Without projects the outline can never be generated, and there is no
+    # manual entry path. Say so now instead of marking the material "ready"
+    # and failing at generation time.
+    if not parsed.projects:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "课程标准里未识别到教学项目表：需要一张表头含「项目名称」「教学内容」「参考课时」的表格，"
+                "参考课时写成总数（12）或理论/实践（8/4），请检查后重新上传"
+            ),
+        )
 
     assert current_user.id is not None
     asset_path = write_unique_asset(TASK_FILE_DIR, task_id, "course_standard", suffix, content)
@@ -577,7 +642,7 @@ async def upload_schedule_candidate(
     finally:
         temp_path.unlink(missing_ok=True)
     if not analysis.sessions:
-        raise HTTPException(status_code=400, detail="课表中没有可用课次")
+        raise HTTPException(status_code=400, detail=_no_sessions_detail(analysis, course_filter))
     assert current_user.id is not None
     asset_path = write_unique_asset(TASK_FILE_DIR, task_id, "schedule_candidate", suffix, content)
     pending = session.exec(
@@ -1665,6 +1730,32 @@ def _get_outline_revision_candidate_or_404(
     if candidate is None or candidate.task_id != task_id:
         raise HTTPException(status_code=404, detail="课程实施大纲候选内容不存在")
     return candidate
+
+
+def _no_sessions_detail(analysis, course_filter: str | None) -> dict:
+    """Name the courses the sheet does hold, so the teacher can pick one.
+
+    An empty result almost always means the course record and the registrar
+    spell the course differently; the bare 「没有可用课次」 left teachers
+    guessing at that.
+    """
+    names = list(analysis.course_names)
+    if names and course_filter:
+        message = (
+            f"课表里没有和「{course_filter}」对应的课次。"
+            f"课表中识别到的课程：{'、'.join(names)}。"
+            "可以直接选择其中一门导入，或先把课程名称改成一致后重新上传。"
+        )
+    elif names:
+        message = "课表中没有可用课次，请检查节次列是否为空。"
+    else:
+        message = "课表中没有可用课次，未识别到任何课程，请确认这是教务系统导出的课表。"
+    return {
+        "message": message,
+        "detected_headers": analysis.detected_headers,
+        "missing_fields": [],
+        "course_names": names,
+    }
 
 
 def _get_task_or_404(task_id: int, session: Session, current_user: User) -> TeachingTask:

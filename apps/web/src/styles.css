@@ -333,6 +333,14 @@ button, input, select, textarea { transition: color 180ms cubic-bezier(.16, 1, .
 .schedule-candidate-head p { margin: 4px 0 0; color: var(--muted); }
 .schedule-change-summary { white-space: nowrap; }
 .inline-alert { margin: 0; padding: 10px 12px; border: 1px solid #ecd1b6; border-radius: 5px; background: #fffaf2; color: var(--text); }
+.schedule-mismatch { display: grid; gap: 10px; }
+.schedule-mismatch p { margin: 0; }
+.course-settings-form { display: grid; gap: 14px; }
+.course-settings-form .form-actions { display: flex; justify-content: flex-end; }
+.course-danger p { margin: 0; color: var(--muted); }
+.course-danger-confirm { display: grid; gap: 10px; padding: 12px; border: 1px solid #efc8ce; border-radius: 5px; background: #fff7f8; }
+.course-danger-confirm p { color: var(--text); }
+.course-danger-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .schedule-course-filter { display: flex; align-items: center; gap: 8px; }
 .schedule-course-filter span { color: var(--muted); }
 .schedule-mapping-table, .schedule-preview-table { min-width: 0; border: 1px solid var(--line); }
