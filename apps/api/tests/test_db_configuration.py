@@ -57,3 +57,19 @@ def test_a_database_missing_a_late_column_gets_it_back(tmp_path):
 
     assert "project_name" in {c["name"] for c in inspect(older).get_columns("outlinerow")}
     older.dispose()
+
+
+def test_the_user_table_gets_its_late_column_despite_being_a_reserved_word(tmp_path):
+    """`user` is reserved in PostgreSQL, so the DDL must quote the table name."""
+    import app.models  # noqa: F401
+
+    older = create_engine(f"sqlite:///{(tmp_path / 'older-user.db').as_posix()}")
+    SQLModel.metadata.create_all(older)
+    with older.begin() as connection:
+        connection.exec_driver_sql('ALTER TABLE "user" DROP COLUMN must_change_password')
+    assert "must_change_password" not in {c["name"] for c in inspect(older).get_columns("user")}
+
+    ensure_added_columns(older)
+
+    assert "must_change_password" in {c["name"] for c in inspect(older).get_columns("user")}
+    older.dispose()

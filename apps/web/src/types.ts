@@ -39,6 +39,8 @@ export interface CurrentUser {
   name: string;
   role: "admin" | "teacher" | string;
   is_active: boolean;
+  /** Set whenever an admin chose the password; the app forces a change before anything else. */
+  must_change_password?: boolean;
   major_ids: number[];
 }
 
@@ -54,10 +56,27 @@ export interface ManagedUser extends CurrentUser {}
 export interface UserCreate {
   employee_no: string;
   name: string;
+  /** Empty means the employee number becomes the initial password. */
   password: string;
   role: "admin" | "teacher";
   major_ids: number[];
   is_active: boolean;
+}
+
+export interface UserUpdate {
+  name?: string;
+  is_active?: boolean;
+  major_ids?: number[];
+}
+
+export interface UserBatchItem {
+  employee_no: string;
+  name: string;
+}
+
+export interface UserBatchResult {
+  created: ManagedUser[];
+  skipped: string[];
 }
 
 export interface ParseSummary {

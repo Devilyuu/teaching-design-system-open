@@ -55,6 +55,9 @@ class _AddedColumn:
 
 
 ADDED_COLUMNS: dict[str, tuple[_AddedColumn, ...]] = {
+    "user": (
+        _AddedColumn("must_change_password", "BOOLEAN NOT NULL DEFAULT 0", "BOOLEAN NOT NULL DEFAULT FALSE"),
+    ),
     "teachingtask": (
         _AddedColumn("owner_id", "INTEGER", "INTEGER"),
         _AddedColumn("major_id", "INTEGER", "INTEGER"),
@@ -113,7 +116,9 @@ def ensure_added_columns(bind=None) -> None:
                 if column.name in existing:
                     continue
                 definition = column.postgres_type if postgres else column.sqlite_type
-                connection.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column.name} {definition}")
+                # Quoted because "user" is a reserved word in PostgreSQL; the
+                # ORM quotes it for its own statements, raw DDL has to as well.
+                connection.exec_driver_sql(f'ALTER TABLE "{table}" ADD COLUMN {column.name} {definition}')
                 if column.backfill:
                     connection.exec_driver_sql(column.backfill)
 

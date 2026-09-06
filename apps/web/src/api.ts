@@ -26,7 +26,10 @@ import type {
   SourceReview,
   TeachingTask,
   TeachingTaskCreate,
-  UserCreate
+  UserBatchItem,
+  UserBatchResult,
+  UserCreate,
+  UserUpdate
 } from "./types";
 
 export function resolveApiBaseUrl(configuredUrl: string | undefined, isDev: boolean, baseUrl: string): string {
@@ -215,6 +218,20 @@ export function rejectLessonRevisionCandidate(taskId: number, candidateId: numbe
 export function createUser(payload: UserCreate): Promise<ManagedUser> {
   return request<ManagedUser>("/admin/users", {
     method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function createUsersBatch(items: UserBatchItem[], majorIds: number[]): Promise<UserBatchResult> {
+  return request<UserBatchResult>("/admin/users/batch", {
+    method: "POST",
+    body: JSON.stringify({ items, major_ids: majorIds })
+  });
+}
+
+export function updateUser(userId: number, payload: UserUpdate): Promise<ManagedUser> {
+  return request<ManagedUser>(`/admin/users/${userId}`, {
+    method: "PATCH",
     body: JSON.stringify(payload)
   });
 }

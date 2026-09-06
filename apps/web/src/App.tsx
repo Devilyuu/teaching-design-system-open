@@ -23,6 +23,7 @@ import {
   createMajor,
   createTask,
   createUser,
+  createUsersBatch,
   deleteTask,
   exportLessonPlans,
   exportOutline,
@@ -41,6 +42,7 @@ import {
   resetUserPassword,
   updateLessonPlan,
   updateTask,
+  updateUser,
   updateOutlineRow
 } from "./api";
 import type { CurrentUser, LessonPlan, Major, ManagedUser, OutlineRevisionCandidate, OutlineRevisionField, OutlineRow, SourceReview, TeachingTask, TeachingTaskCreate } from "./types";
@@ -50,6 +52,7 @@ import LessonGenerationProgress from "./LessonGenerationProgress";
 import LessonRevisionControl from "./LessonRevisionControl";
 import CourseMaterialsPage from "./CourseMaterialsPage";
 import ExportHistoryPanel from "./ExportHistoryPanel";
+import { parseTeacherRoster } from "./teacherRoster";
 
 type View = "dashboard" | "courses" | "new-task" | "course" | "admin" | "account";
 type WorkspaceTab = "overview" | "materials" | "outline" | "lessons" | "sessions" | "exports";
@@ -438,6 +441,16 @@ export default function App() {
     return <LoginPage error={error} loading={loading} onLogin={handleLogin} />;
   }
 
+  if (currentUser.must_change_password) {
+    return (
+      <FirstLoginPasswordPage
+        currentUser={currentUser}
+        onChanged={async () => setCurrentUser(await getCurrentUser())}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <Sidebar view={view} currentCourse={currentCourse} currentUser={currentUser} onChange={activate} />
@@ -552,7 +565,7 @@ export default function App() {
             />
           )}
           {view === "account" && <PasswordPage />}
-          {view === "admin" && currentUser.role === "admin" && <AdminPage />}
+          {view === "admin" && currentUser.role === "admin" && <AdminPage currentUser={currentUser} />}
         </div>
       </main>
     </div>
@@ -590,7 +603,35 @@ function LoginPage({
         <label>密码<input autoComplete="current-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         {error && <div className="error" role="alert">{error}</div>}
         <button className="btn primary" type="submit" disabled={loading}>{loading ? "登录中" : "登录"}</button>
+        <p className="auth-hint">账号由系部管理员创建，初始密码默认为工号，首次登录后需要改成自己的密码。</p>
       </form>
+    </main>
+  );
+}
+
+function FirstLoginPasswordPage({
+  currentUser,
+  onChanged,
+  onLogout
+}: {
+  currentUser: CurrentUser;
+  onChanged: () => Promise<void>;
+  onLogout: () => void;
+}) {
+  return (
+    <main className="auth-shell">
+      <div className="auth-card first-login-card">
+        <div className="brand auth-brand">
+          <div className="brand-mark"><BookOpenCheck /></div>
+          <div>
+            <h1>首次登录，请先设置自己的密码</h1>
+            <p>{currentUser.name} · {currentUser.employee_no}</p>
+          </div>
+        </div>
+        <p className="auth-hint">现在用的是管理员分配的初始密码。你的课程资料和教案只有你自己能看到，所以请先改成一个只有你知道的密码：至少 8 位，且不能与工号相同。</p>
+        <PasswordForm currentLabel="初始密码" submitLabel="设置密码并进入系统" onChanged={onChanged} />
+        <button className="btn" type="button" onClick={onLogout}>退出登录</button>
+      </div>
     </main>
   );
 }
@@ -1536,7 +1577,15 @@ function LessonPage({
   );
 }
 
-function PasswordPage() {
+function PasswordForm({
+  currentLabel = "当前密码",
+  submitLabel = "保存新密码",
+  onChanged
+}: {
+  currentLabel?: string;
+  submitLabel?: string;
+  onChanged?: () => Promise<void>;
+}) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -1568,6 +1617,7 @@ function PasswordPage() {
       setNewPassword("");
       setConfirmPassword("");
       setMessage("密码已修改");
+      await onChanged?.();
     } catch (reason) {
       setPasswordError(reason instanceof Error ? reason.message : "密码修改失败");
     } finally {
@@ -1576,22 +1626,28 @@ function PasswordPage() {
   }
 
   return (
+    <form className="password-form" onSubmit={submit}>
+      <label>{currentLabel}<input autoComplete="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
+      <label>新密码<input aria-describedby="password-requirements" autoComplete="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
+      <label>确认新密码<input aria-describedby="password-requirements" autoComplete="new-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>
+      <div className="password-requirements" id="password-requirements" aria-live="polite">
+        <span className={meetsLength ? "met" : ""}>{meetsLength ? "已达到 8 位" : "至少 8 位"}</span>
+        <span className={passwordsMatch ? "met" : hasConfirmation ? "unmet" : ""}>{passwordsMatch ? "两次输入一致" : hasConfirmation ? "两次输入不一致" : "请再次输入新密码"}</span>
+      </div>
+      {message && <div className="notice">{message}</div>}
+      {passwordError && <div className="error">{passwordError}</div>}
+      <div className="form-actions">
+        <button className="btn primary" type="submit" disabled={!canSubmit}>{saving ? "保存中" : submitLabel}</button>
+      </div>
+    </form>
+  );
+}
+
+function PasswordPage() {
+  return (
     <section className="view active account-layout">
       <Panel title="修改密码" sub="用于当前登录账号">
-        <form className="password-form" onSubmit={submit}>
-          <label>当前密码<input autoComplete="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></label>
-          <label>新密码<input aria-describedby="password-requirements" autoComplete="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label>
-          <label>确认新密码<input aria-describedby="password-requirements" autoComplete="new-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></label>
-          <div className="password-requirements" id="password-requirements" aria-live="polite">
-            <span className={meetsLength ? "met" : ""}>{meetsLength ? "已达到 8 位" : "至少 8 位"}</span>
-            <span className={passwordsMatch ? "met" : hasConfirmation ? "unmet" : ""}>{passwordsMatch ? "两次输入一致" : hasConfirmation ? "两次输入不一致" : "请再次输入新密码"}</span>
-          </div>
-          {message && <div className="notice">{message}</div>}
-          {passwordError && <div className="error">{passwordError}</div>}
-          <div className="form-actions">
-            <button className="btn primary" type="submit" disabled={!canSubmit}>{saving ? "保存中" : "保存新密码"}</button>
-          </div>
-        </form>
+        <PasswordForm />
       </Panel>
       <Panel title="使用提醒" sub="账号安全">
         <div className="check-list">
@@ -1603,9 +1659,9 @@ function PasswordPage() {
   );
 }
 
-function AdminPage() {
+function AdminPage({ currentUser }: { currentUser: CurrentUser }) {
   const [section, setSection] = useState<"accounts" | "libraries" | "ai">("accounts");
-  const [composer, setComposer] = useState<"major" | "user" | null>(null);
+  const [composer, setComposer] = useState<"major" | "user" | "batch" | null>(null);
   const [majors, setMajors] = useState<Major[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [majorDraft, setMajorDraft] = useState({ name: "", short_name: "", is_active: true });
@@ -1613,13 +1669,20 @@ function AdminPage() {
   const [userDraft, setUserDraft] = useState({
     employee_no: "",
     name: "",
-    password: "Teacher@2026!",
+    password: "",
     role: "teacher" as const,
     major_ids: [] as number[],
     is_active: true
   });
+  const [batchText, setBatchText] = useState("");
+  const [batchMajorIds, setBatchMajorIds] = useState<number[]>([]);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState({ name: "", major_ids: [] as number[] });
   const [adminNotice, setAdminNotice] = useState("");
   const [adminError, setAdminError] = useState("");
+  const roster = useMemo(() => parseTeacherRoster(batchText), [batchText]);
+  const pendingInitialPassword = users.filter((user) => user.must_change_password && user.is_active).length;
 
   useEffect(() => {
     Promise.all([listAdminMajors(), listAdminUsers()])
@@ -1629,6 +1692,15 @@ function AdminPage() {
       })
       .catch((reason: Error) => setAdminError(reason.message));
   }, []);
+
+  function majorNames(ids: number[]): string {
+    const names = ids.map((id) => majors.find((major) => major.id === id)?.short_name || majors.find((major) => major.id === id)?.name).filter(Boolean);
+    return names.length ? names.join("、") : "未绑定专业";
+  }
+
+  function toggleId(ids: number[], id: number): number[] {
+    return ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id];
+  }
 
   async function submitMajor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1650,42 +1722,86 @@ function AdminPage() {
     try {
       const created = await createUser(userDraft);
       setUsers((current) => [...current, created]);
-      setUserDraft({
-        employee_no: "",
-        name: "",
-        password: "Teacher@2026!",
-        role: "teacher",
-        major_ids: [],
-        is_active: true
-      });
+      setUserDraft({ employee_no: "", name: "", password: "", role: "teacher", major_ids: [], is_active: true });
       setComposer(null);
-      setAdminNotice("教师账号已新增");
+      setAdminNotice(
+        userDraft.password.trim()
+          ? `已新增 ${created.name} 的账号，首次登录需修改密码`
+          : `已新增 ${created.name} 的账号，初始密码为工号 ${created.employee_no}，首次登录需修改`
+      );
     } catch (reason) {
       setAdminError(reason instanceof Error ? reason.message : "教师账号创建失败");
     }
   }
 
-  function toggleUserMajor(majorId: number) {
-    setUserDraft((current) => ({
-      ...current,
-      major_ids: current.major_ids.includes(majorId)
-        ? current.major_ids.filter((id) => id !== majorId)
-        : [...current.major_ids, majorId]
-    }));
+  async function submitBatch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAdminError("");
+    setAdminNotice("");
+    setBatchBusy(true);
+    try {
+      const result = await createUsersBatch(roster.items, batchMajorIds);
+      setUsers((current) => [...current, ...result.created]);
+      setBatchText("");
+      setComposer(null);
+      const skippedNote = result.skipped.length
+        ? `；${result.skipped.length} 个工号已有账号，未重复创建：${result.skipped.join("、")}`
+        : "";
+      setAdminNotice(`已新增 ${result.created.length} 位教师，初始密码均为本人工号，首次登录需修改${skippedNote}`);
+    } catch (reason) {
+      setAdminError(reason instanceof Error ? reason.message : "批量导入失败");
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
+  function startEdit(user: ManagedUser) {
+    if (editingUserId === user.id) {
+      setEditingUserId(null);
+      return;
+    }
+    setEditingUserId(user.id);
+    setEditDraft({ name: user.name, major_ids: user.major_ids });
+  }
+
+  async function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (editingUserId === null) return;
+    setAdminError("");
+    try {
+      const updated = await updateUser(editingUserId, editDraft);
+      setUsers((current) => current.map((user) => (user.id === updated.id ? updated : user)));
+      setEditingUserId(null);
+      setAdminNotice(`${updated.name} 的账号信息已保存`);
+    } catch (reason) {
+      setAdminError(reason instanceof Error ? reason.message : "账号信息保存失败");
+    }
+  }
+
+  async function toggleActive(user: ManagedUser) {
+    setAdminError("");
+    try {
+      const updated = await updateUser(user.id, { is_active: !user.is_active });
+      setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setAdminNotice(updated.is_active ? `${updated.name} 的账号已启用` : `${updated.name} 的账号已停用，课程资料保留，重新启用即可继续使用`);
+    } catch (reason) {
+      setAdminError(reason instanceof Error ? reason.message : "账号状态修改失败");
+    }
   }
 
   async function resetPassword(user: ManagedUser) {
     setAdminNotice("");
     setAdminError("");
-    const password = resetDrafts[user.id]?.trim() || "Teacher@2026!";
-    if (password.length < 8) {
-      setAdminError("新密码至少需要 8 位");
+    const password = resetDrafts[user.id]?.trim() ?? "";
+    if (password && password.length < 8) {
+      setAdminError("新密码至少需要 8 位，留空则重置为工号");
       return;
     }
     try {
       await resetUserPassword(user.id, password);
       setResetDrafts((current) => ({ ...current, [user.id]: "" }));
-      setAdminNotice("密码已重置");
+      setUsers((current) => current.map((item) => (item.id === user.id ? { ...item, must_change_password: true } : item)));
+      setAdminNotice(password ? "密码已重置" : `${user.name} 的密码已重置为工号 ${user.employee_no}，下次登录需重新设置`);
     } catch (reason) {
       setAdminError(reason instanceof Error ? reason.message : "密码重置失败");
     }
@@ -1701,6 +1817,7 @@ function AdminPage() {
         <div className="admin-summary" aria-label="管理数据概况">
           <span>{users.length} 个账号</span>
           <span>{majors.length} 个专业</span>
+          <span>{pendingInitialPassword} 人尚未修改初始密码</span>
         </div>
       </div>
 
@@ -1712,6 +1829,8 @@ function AdminPage() {
 
       {section === "accounts" && (
         <div className="admin-account-section" role="tabpanel">
+          {adminNotice && <div className="notice" role="status">{adminNotice}</div>}
+          {adminError && <div className="error" role="alert">{adminError}</div>}
           <div className="admin-account-grid">
             <Panel title="专业管理" action={<button className="btn" type="button" aria-expanded={composer === "major"} onClick={() => setComposer(composer === "major" ? null : "major")}><Plus className="icon" />新增专业</button>}>
               {composer === "major" && (
@@ -1732,34 +1851,95 @@ function AdminPage() {
               </div>
             </Panel>
 
-            <Panel title="教师账号" action={<button className="btn primary" type="button" aria-expanded={composer === "user"} onClick={() => setComposer(composer === "user" ? null : "user")}><Plus className="icon" />新增教师</button>}>
+            <Panel
+              title="教师账号"
+              action={(
+                <div className="panel-action-group">
+                  <button className="btn" type="button" aria-expanded={composer === "batch"} onClick={() => setComposer(composer === "batch" ? null : "batch")}><Upload className="icon" />批量导入</button>
+                  <button className="btn primary" type="button" aria-expanded={composer === "user"} onClick={() => setComposer(composer === "user" ? null : "user")}><Plus className="icon" />新增教师</button>
+                </div>
+              )}
+            >
+              {composer === "batch" && (
+                <form className="admin-composer batch-form" onSubmit={submitBatch}>
+                  <label>教师名单
+                    <textarea
+                      value={batchText}
+                      onChange={(event) => setBatchText(event.target.value)}
+                      rows={8}
+                      placeholder={"每行一位教师：工号 姓名\n可直接从 Excel 复制「工号」「姓名」两列粘贴，例如：\n2019001\t张明\n2019002\t李华"}
+                    />
+                  </label>
+                  <div className="field-block">
+                    <span>统一绑定的授课专业（可选，之后可逐人调整）</span>
+                    <div className="checkbox-grid">
+                      {majors.map((major) => (
+                        <label key={major.id}><input type="checkbox" checked={batchMajorIds.includes(major.id)} onChange={() => setBatchMajorIds((current) => toggleId(current, major.id))} />{major.name}</label>
+                      ))}
+                    </div>
+                    <small>初始密码为各自的工号，老师首次登录时系统会要求改成自己的密码。已有账号的工号会跳过，不会重置任何人的密码。</small>
+                  </div>
+                  <div className="batch-preview" aria-live="polite">
+                    {roster.items.length > 0 && <span>识别到 {roster.items.length} 位教师</span>}
+                    {roster.invalid.length > 0 && <span className="unmet">有 {roster.invalid.length} 行无法识别，请补成「工号 姓名」：{roster.invalid.slice(0, 3).join("；")}{roster.invalid.length > 3 ? " …" : ""}</span>}
+                  </div>
+                  <div className="form-actions">
+                    <button className="btn primary" type="submit" disabled={batchBusy || roster.items.length === 0 || roster.invalid.length > 0}>
+                      {batchBusy ? "导入中" : `导入 ${roster.items.length} 位教师`}
+                    </button>
+                  </div>
+                </form>
+              )}
               {composer === "user" && (
                 <form className="admin-composer form-grid" onSubmit={submitUser}>
                   <label>工号<input required value={userDraft.employee_no} onChange={(event) => setUserDraft({ ...userDraft, employee_no: event.target.value })} /></label>
                   <label>姓名<input required value={userDraft.name} onChange={(event) => setUserDraft({ ...userDraft, name: event.target.value })} /></label>
-                  <label>初始密码<input required minLength={8} value={userDraft.password} onChange={(event) => setUserDraft({ ...userDraft, password: event.target.value })} /></label>
+                  <label>初始密码<input value={userDraft.password} placeholder="留空则以工号作为初始密码" onChange={(event) => setUserDraft({ ...userDraft, password: event.target.value })} /></label>
                   <div className="field-block">
                     <span>可授课专业</span>
                     <div className="checkbox-grid">
                       {majors.map((major) => (
-                        <label key={major.id}><input type="checkbox" checked={userDraft.major_ids.includes(major.id)} onChange={() => toggleUserMajor(major.id)} />{major.name}</label>
+                        <label key={major.id}><input type="checkbox" checked={userDraft.major_ids.includes(major.id)} onChange={() => setUserDraft((current) => ({ ...current, major_ids: toggleId(current.major_ids, major.id) }))} />{major.name}</label>
                       ))}
                     </div>
                   </div>
                   <div className="form-actions"><button className="btn primary" type="submit">保存教师账号</button></div>
                 </form>
               )}
-              <p className="section-description">教师使用工号登录，可绑定多个授课专业。密码重置仅在需要时操作。</p>
+              <p className="section-description">教师用工号登录。新账号的初始密码为工号，首次登录必须改成自己的密码；停用账号后本人无法登录，课程资料保留，重新启用即可继续。</p>
               <div className="library-list admin-list user-admin-list">
                 {users.map((user) => (
                   <div className="library-item" key={user.id}>
                     <div className="admin-user-main">
-                      <div><strong>{user.name} · {user.employee_no}</strong><p>{user.role === "admin" ? "管理员" : "教师"} / {user.major_ids.length} 个专业</p></div>
-                      <span className={`tag ${user.is_active ? "green" : "rose"}`}>{user.is_active ? "启用" : "停用"}</span>
+                      <div><strong>{user.name} · {user.employee_no}</strong><p>{user.role === "admin" ? "管理员" : "教师"} / {majorNames(user.major_ids)}</p></div>
+                      <div className="tag-row">
+                        {user.must_change_password && user.is_active && <span className="tag amber">初始密码未修改</span>}
+                        <span className={`tag ${user.is_active ? "green" : "rose"}`}>{user.is_active ? "启用" : "停用"}</span>
+                      </div>
                     </div>
+                    <div className="admin-user-actions">
+                      <button className="btn" type="button" aria-expanded={editingUserId === user.id} onClick={() => startEdit(user)}>{editingUserId === user.id ? "收起" : `编辑 ${user.name}`}</button>
+                      {user.id !== currentUser.id && (
+                        <button className="btn" type="button" onClick={() => toggleActive(user)}>{user.is_active ? `停用 ${user.name}` : `启用 ${user.name}`}</button>
+                      )}
+                    </div>
+                    {editingUserId === user.id && (
+                      <form className="admin-composer form-grid" onSubmit={submitEdit}>
+                        <label>姓名<input required value={editDraft.name} onChange={(event) => setEditDraft({ ...editDraft, name: event.target.value })} /></label>
+                        <div className="field-block">
+                          <span>可授课专业</span>
+                          <div className="checkbox-grid">
+                            {majors.map((major) => (
+                              <label key={major.id}><input type="checkbox" checked={editDraft.major_ids.includes(major.id)} onChange={() => setEditDraft((current) => ({ ...current, major_ids: toggleId(current.major_ids, major.id) }))} />{major.name}</label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="form-actions"><button className="btn primary" type="submit">保存修改</button></div>
+                      </form>
+                    )}
                     <div className="reset-row">
                       <label>重置 {user.name} 密码
-                        <input type="password" value={resetDrafts[user.id] ?? ""} onChange={(event) => setResetDrafts((current) => ({ ...current, [user.id]: event.target.value }))} placeholder="留空使用默认密码" />
+                        <input type="password" value={resetDrafts[user.id] ?? ""} onChange={(event) => setResetDrafts((current) => ({ ...current, [user.id]: event.target.value }))} placeholder="留空则重置为工号" />
                       </label>
                       <button className="btn" type="button" onClick={() => resetPassword(user)}>重置 {user.name} 密码</button>
                     </div>
@@ -1768,8 +1948,6 @@ function AdminPage() {
               </div>
             </Panel>
           </div>
-          {adminNotice && <div className="notice" role="status">{adminNotice}</div>}
-          {adminError && <div className="error" role="alert">{adminError}</div>}
         </div>
       )}
 

@@ -8,6 +8,8 @@ from app.schemas import LoginRequest, PasswordChange, StatusResponse, TokenRespo
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+MIN_PASSWORD_LENGTH = 8
+
 
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
@@ -28,6 +30,7 @@ def read_current_user(
         name=current_user.name,
         role=current_user.role,
         is_active=current_user.is_active,
+        must_change_password=current_user.must_change_password,
         major_ids=user_major_ids(current_user, session),
     )
 
@@ -39,8 +42,15 @@ def change_password(
     session: Session = Depends(get_session),
 ) -> StatusResponse:
     if not verify_password(payload.current_password, current_user.password_hash):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
+        raise HTTPException(status_code=400, detail="当前密码不正确")
+    if len(payload.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"新密码至少需要 {MIN_PASSWORD_LENGTH} 位")
+    # The employee number is the initial password the admin hands out;
+    # "changing" to it would leave the account exactly as exposed as before.
+    if payload.new_password == current_user.employee_no:
+        raise HTTPException(status_code=400, detail="新密码不能与工号相同")
     current_user.password_hash = hash_password(payload.new_password)
+    current_user.must_change_password = False
     session.add(current_user)
     session.commit()
     return StatusResponse(status="ok")

@@ -34,6 +34,9 @@ class User(SQLModel, table=True):
     role: str = "teacher"
     password_hash: str
     is_active: bool = True
+    # Set whenever an admin chose the password (account creation, reset): the
+    # teacher is the only one who should know the password they work with.
+    must_change_password: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 

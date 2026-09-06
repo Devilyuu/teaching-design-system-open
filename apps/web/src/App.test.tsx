@@ -167,8 +167,9 @@ const exportRecords = [
   }
 ];
 
-function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean } = {}) {
+function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean; mustChangePassword?: boolean } = {}) {
   let lessonsGenerated = false;
+  let mustChangePassword = Boolean(options.mustChangePassword);
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
@@ -179,6 +180,7 @@ function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean 
         name: "系统管理员",
         role: "admin",
         is_active: true,
+        must_change_password: mustChangePassword,
         major_ids: []
       });
     }
@@ -188,6 +190,7 @@ function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean 
     }
 
     if (url.endsWith("/auth/change-password") && init?.method === "POST") {
+      mustChangePassword = false;
       return jsonResponse({ status: "ok" });
     }
 
@@ -208,6 +211,21 @@ function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean 
 
     if (url.endsWith("/admin/users/2/password") && init?.method === "POST") {
       return jsonResponse({ status: "ok" });
+    }
+
+    if (url.endsWith("/admin/users/batch") && init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as { items: { employee_no: string; name: string }[]; major_ids: number[] };
+      return jsonResponse({
+        created: body.items
+          .filter((item) => item.employee_no !== "T001")
+          .map((item, index) => ({ id: 10 + index, ...item, role: "teacher", is_active: true, must_change_password: true, major_ids: body.major_ids })),
+        skipped: body.items.filter((item) => item.employee_no === "T001").map((item) => item.employee_no)
+      });
+    }
+
+    if (url.endsWith("/admin/users/2") && init?.method === "PATCH") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return jsonResponse({ id: 2, employee_no: "T001", name: "张老师", role: "teacher", is_active: true, major_ids: [1], ...body });
     }
 
     if (url.endsWith("/tasks") && (!init || init.method === undefined)) {
@@ -551,6 +569,65 @@ describe("App", () => {
 
     await user.click(screen.getByRole("tab", { name: "AI 生成配置" }));
     expect(screen.getByRole("heading", { name: "AI 模型配置" })).toBeInTheDocument();
+  });
+
+  it("imports a pasted roster as teacher accounts and reports skipped numbers", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "标准库与账号管理" }));
+    await user.click(await screen.findByRole("button", { name: "批量导入" }));
+    await user.type(screen.getByLabelText("教师名单"), "2019001 张明{enter}2019002	李华{enter}T001 张老师");
+    expect(screen.getByText("识别到 3 位教师")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "导入 3 位教师" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("已新增 2 位教师");
+    expect(screen.getByRole("status")).toHaveTextContent("T001");
+    expect(screen.getByText("张明 · 2019001")).toBeInTheDocument();
+    expect(screen.getByText("李华 · 2019002")).toBeInTheDocument();
+  });
+
+  it("refuses to import a roster while a line cannot be read", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "标准库与账号管理" }));
+    await user.click(await screen.findByRole("button", { name: "批量导入" }));
+    await user.type(screen.getByLabelText("教师名单"), "2019001 张明{enter}只有姓名");
+
+    expect(screen.getByText(/有 1 行无法识别/)).toHaveTextContent("只有姓名");
+    expect(screen.getByRole("button", { name: "导入 1 位教师" })).toBeDisabled();
+  });
+
+  it("lets an admin deactivate a teacher without offering to deactivate themselves", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "标准库与账号管理" }));
+    expect(await screen.findByRole("button", { name: "停用 张老师" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "停用 系统管理员" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "停用 张老师" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("张老师 的账号已停用");
+    expect(screen.getByRole("button", { name: "启用 张老师" })).toBeInTheDocument();
+  });
+
+  it("makes a first-time user set their own password before showing the workspace", async () => {
+    vi.stubGlobal("fetch", mockFetch({ mustChangePassword: true }));
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "首次登录，请先设置自己的密码" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "教师工作台" })).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("初始密码"), "admin");
+    await user.type(screen.getByLabelText("新密码"), "Mine@2026!");
+    await user.type(screen.getByLabelText("确认新密码"), "Mine@2026!");
+    await user.click(screen.getByRole("button", { name: "设置密码并进入系统" }));
+
+    expect(await screen.findByRole("button", { name: "教师工作台" })).toBeInTheDocument();
   });
 
   it("keeps admin creation forms collapsed until requested", async () => {

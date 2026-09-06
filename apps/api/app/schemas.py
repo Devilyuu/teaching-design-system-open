@@ -20,7 +20,8 @@ class PasswordChange(BaseModel):
 
 
 class PasswordReset(BaseModel):
-    password: str
+    # Empty means "back to the employee number", the same rule as a new account.
+    password: str = ""
 
 
 class StatusResponse(BaseModel):
@@ -33,6 +34,7 @@ class UserRead(BaseModel):
     name: str
     role: str
     is_active: bool
+    must_change_password: bool = False
     major_ids: list[int] = []
 
 
@@ -49,10 +51,35 @@ class MajorRead(MajorCreate):
 class UserCreate(BaseModel):
     employee_no: str
     name: str
-    password: str
+    # Empty means the employee number: every teacher gets a different initial
+    # password they already know, and must replace it on first login.
+    password: str = ""
     role: str = "teacher"
     major_ids: list[int] = []
     is_active: bool = True
+
+
+class UserUpdate(BaseModel):
+    name: str | None = None
+    is_active: bool | None = None
+    major_ids: list[int] | None = None
+
+
+class UserBatchItem(BaseModel):
+    employee_no: str
+    name: str
+
+
+class UserBatchCreate(BaseModel):
+    items: list[UserBatchItem]
+    major_ids: list[int] = []
+
+
+class UserBatchResult(BaseModel):
+    created: list[UserRead]
+    # Employee numbers that already had an account; left untouched so a roster
+    # can be pasted again after adding a few names without resetting anyone.
+    skipped: list[str]
 
 
 class TeachingTaskCreate(BaseModel):

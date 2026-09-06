@@ -828,3 +828,16 @@ td textarea { min-width: 220px; min-height: 58px; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Account management: batch roster import, per-user actions, first-login password page */
+.panel-action-group { display: flex; gap: 8px; flex-wrap: wrap; }
+.batch-form { display: grid; gap: 12px; }
+.batch-form textarea { min-height: 160px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; white-space: pre; }
+.batch-preview { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.batch-preview .unmet { color: var(--rose); }
+.tag-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.admin-user-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.auth-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.first-login-card { max-width: 520px; }
+.first-login-card .password-form .form-actions { justify-content: stretch; }
+.first-login-card .password-form .form-actions .btn { flex: 1; }
