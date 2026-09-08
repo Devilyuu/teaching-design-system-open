@@ -79,3 +79,28 @@ def test_a_subsection_the_standard_omits_says_so_rather_than_borrowing(tmp_path)
     assert lines["在线学习资源"] == [MISSING]
     # 课程标准里从来没有「高质量作业范例」这一项，永远交给教师
     assert lines["高质量作业范例"] == [MISSING]
+
+
+def test_a_label_and_its_entry_on_one_line_are_read_too(tmp_path):
+    """Some standards skip the （1）/（2） sub-headings and write 「教材：xxx」."""
+    path = _standard(
+        tmp_path / "inline.docx",
+        [
+            "五、课程教学资源",
+            "1．实践条件",
+            "机房一间",
+            "3．参考教材及教学参考书建议",
+            "教材：After Effects 从入门到精通，李某编著，某大学出版社",
+            "参考书：《动态图形设计》倪某编著，某美术出版社，2022年12月",
+            "4．学习资源选用",
+            "课程资源库：",
+            "http://example.invalid/course",
+            "六、编制说明",
+        ],
+    )
+
+    resources = extract_course_resources(path)
+
+    assert resources.textbooks == ["After Effects 从入门到精通，李某编著，某大学出版社"]
+    assert resources.references == ["《动态图形设计》倪某编著，某美术出版社，2022年12月"]
+    assert resources.online == ["课程资源库：", "http://example.invalid/course"]

@@ -7,6 +7,7 @@ from docx.oxml.ns import qn
 
 from app.services.lesson_template_filler import (
     LessonTemplateError,
+    dominant_run_properties,
     fill_structured_lesson_template,
     find_lesson_template_blocks,
     find_unfilled_generated_cells,
@@ -314,3 +315,40 @@ def test_reports_nothing_once_the_marked_cell_is_replaced():
     fill_structured_lesson_template(produced, [_lesson(1)], [{}], {})
 
     assert find_unfilled_generated_cells(template, produced) == []
+
+
+def _styled(cell, text: str, face: str, half_points: int, bold: bool) -> None:
+    run = cell.paragraphs[0].add_run(text)
+    fonts = OxmlElement("w:rFonts")
+    for attribute in ("w:ascii", "w:hAnsi", "w:eastAsia"):
+        fonts.set(qn(attribute), face)
+    properties = run._r.get_or_add_rPr()
+    properties.append(fonts)
+    if bold:
+        properties.append(OxmlElement("w:b"))
+    size = OxmlElement("w:sz")
+    size.set(qn("w:val"), str(half_points))
+    properties.append(size)
+
+
+def test_generated_process_text_follows_the_body_cells_not_the_headings():
+    """The school's 教学实施过程 table: 黑体 bold headings, blank content cells.
+
+    Nothing is marked and the content cells carry no formatting, so the table's
+    own runs decide. Counted whole, the header row outvoted the single 宋体
+    小五 「课中」 cell and every generated line came out 黑体 五号 bold, as
+    if each were a heading.
+    """
+    document = Document()
+    table = document.add_table(rows=4, cols=5)
+    for index, header in enumerate(["教学环节（时长）", "教学内容", "教师活动", "学生活动", "对应教学目标"]):
+        _styled(table.cell(0, index), header, "黑体", 21, bold=True)
+    _styled(table.cell(1, 0), "课前", "黑体", 21, bold=True)
+    _styled(table.cell(2, 0), "课中", "宋体", 18, bold=False)
+    _styled(table.cell(3, 0), "课后", "黑体", 18, bold=True)
+
+    chosen = dominant_run_properties(table)
+
+    assert chosen.find(qn("w:rFonts")).get(qn("w:eastAsia")) == "宋体"
+    assert chosen.find(qn("w:sz")).get(qn("w:val")) == "18"
+    assert chosen.find(qn("w:b")) is None

@@ -6,6 +6,8 @@ import json
 import os
 from tempfile import NamedTemporaryFile
 from urllib.parse import quote
+import threading
+from contextlib import contextmanager
 
 from docx import Document
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
@@ -762,6 +764,39 @@ def generate_outline(
     existing = session.exec(select(OutlineRow).where(OutlineRow.task_id == task_id)).first()
     if existing is not None:
         raise HTTPException(status_code=409, detail="课程实施大纲已存在，请使用单次课局部优化")
+    with _outline_generation_guard(task_id):
+        return _generate_outline_rows(task_id, task, session)
+
+
+_OUTLINE_GENERATION_IN_PROGRESS: set[int] = set()
+_OUTLINE_GENERATION_LOCK = threading.Lock()
+
+
+@contextmanager
+def _outline_generation_guard(task_id: int):
+    """One outline generation per course at a time.
+
+    The model call takes minutes, and the request has been seen to outlive the
+    proxy timeout: the browser reported failure, the teacher clicked again, and
+    both requests -- each having found no rows when it looked -- wrote a full
+    set. Two 第 1 次课 in the outline then became two lesson plans per session.
+    The check above cannot see a request still in flight; this can.
+    """
+    with _OUTLINE_GENERATION_LOCK:
+        if task_id in _OUTLINE_GENERATION_IN_PROGRESS:
+            raise HTTPException(
+                status_code=409,
+                detail="课程实施大纲正在生成中（上一次请求仍在处理），请等待一两分钟后刷新页面查看，不要重复点击",
+            )
+        _OUTLINE_GENERATION_IN_PROGRESS.add(task_id)
+    try:
+        yield
+    finally:
+        with _OUTLINE_GENERATION_LOCK:
+            _OUTLINE_GENERATION_IN_PROGRESS.discard(task_id)
+
+
+def _generate_outline_rows(task_id: int, task: TeachingTask, session: Session) -> list[OutlineRow]:
     config = session.exec(
         select(AiModelConfig)
         .where(
@@ -796,6 +831,13 @@ def generate_outline(
     except ModelProviderError as exc:
         raise HTTPException(status_code=502, detail="AI 生成课程实施大纲失败，请稍后重试") from exc
 
+    # Look again after the model call: the guard above is per process, and a
+    # second worker or a restart in between would not have seen this request.
+    if session.exec(select(OutlineRow).where(OutlineRow.task_id == task_id)).first() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="生成期间课程实施大纲已由另一次请求写入，本次结果未保存。请刷新页面查看现有大纲",
+        )
     rows: list[OutlineRow] = []
     for row in generated_rows:
         model = OutlineRow(task_id=task_id, **row.__dict__)

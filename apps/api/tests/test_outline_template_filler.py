@@ -132,9 +132,40 @@ def test_a_list_repeats_the_line_the_template_says_to_copy(tmp_path):
     text = _paragraphs(rendered)
     assert "熟练使用即时设计完成界面设计。" in text
     assert "掌握 AI 赋能的视觉设计流程。" in text
-    assert "教辅：APP草图+流程图+交互原型设计教程，刘源（2020）" in text
-    assert "PS APP UI设计从零开始学，贾浩梅（2022）" in text
-    assert "教辅：PS APP UI设计从零开始学，贾浩梅（2022）" not in text
+    # 「教材：」「教辅：」 head their lists from a line of their own, and the
+    # entries are cited 「[1] 」「[2] 」 the way the school's finished outlines do.
+    textbook = text.index("教材：")
+    assert text[textbook + 1] == "[1] 移动UI界面设计（微课版），张晓景，人民邮电出版社（2018）"
+    reference = text.index("教辅：")
+    assert text[reference + 1 : reference + 3] == [
+        "[1] APP草图+流程图+交互原型设计教程，刘源（2020）",
+        "[2] PS APP UI设计从零开始学，贾浩梅（2022）",
+    ]
+    assert not any(line.startswith("教辅：APP") for line in text)
+
+
+def test_an_entry_the_standard_already_numbers_is_not_numbered_again(tmp_path):
+    resources = CourseResources(textbooks=["[1] 自编讲义"], references=["1．参考书甲", "2．参考书乙"])
+
+    rendered = _export(tmp_path, sections=_sections(), resources=resources, assessments=_assessments())
+
+    text = _paragraphs(rendered)
+    assert "[1] 自编讲义" in text
+    assert "1．参考书甲" in text
+    assert not any(line.startswith("[1] 1．") or line.startswith("[1] [1]") for line in text)
+
+
+def test_each_generated_cell_keeps_the_format_its_own_marker_wore(tmp_path):
+    """教学单元 is a size up from the columns beside it in the school's outlines."""
+    rendered = _export(tmp_path, sections=_sections(), resources=_resources(), assessments=_assessments())
+
+    content = next(table for table in rendered.tables if "教学单元" in table.rows[0].cells[0].text)
+    unit_run = content.rows[1].cells[0].paragraphs[0].runs[0]
+    detail_run = content.rows[1].cells[1].paragraphs[0].runs[0]
+    assert unit_run.text == "一、AI辅助逻辑建模"
+    assert unit_run._r.rPr.find(qn("w:sz")).get(qn("w:val")) == "21"
+    assert detail_run._r.rPr.find(qn("w:sz")).get(qn("w:val")) == "18"
+    assert unit_run._r.rPr.find(qn("w:color")) is None
 
 
 def test_a_subsection_the_standard_says_nothing_about_asks_the_teacher(tmp_path):

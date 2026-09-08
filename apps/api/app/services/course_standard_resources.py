@@ -19,6 +19,10 @@ RESOURCE_SECTION = re.compile(r"^\s*五[、.．]\s*课程教学资源")
 NEXT_SECTION = re.compile(r"^\s*六[、.．]")
 TEXTBOOK_LABEL = re.compile(r"^\s*（\s*1\s*）\s*教材")
 REFERENCE_LABEL = re.compile(r"^\s*（\s*2\s*）\s*参考书")
+# The other way a standard writes these: label and first entry on one line,
+# 「教材：xxx」 / 「参考书：xxx」, straight under 「3．参考教材及教学参考书建议」.
+TEXTBOOK_INLINE = re.compile(r"^\s*教材\s*[：:]\s*(.*)$")
+REFERENCE_INLINE = re.compile(r"^\s*(?:参考书目?|参考教材|教辅)\s*[：:]\s*(.*)$")
 ONLINE_LABEL = re.compile(r"^\s*4\s*[、.．]\s*学习资源选用")
 OTHER_NUMBERED = re.compile(r"^\s*\d\s*[、.．]")
 # 「（按要求选用国家规划教材）」这类是填写说明，不是资源本身
@@ -67,6 +71,12 @@ def read_course_resources(document) -> CourseResources:
             continue
         if REFERENCE_LABEL.match(line):
             bucket = references
+            continue
+        inline = TEXTBOOK_INLINE.match(line) or REFERENCE_INLINE.match(line)
+        if inline:
+            bucket = textbooks if TEXTBOOK_INLINE.match(line) else references
+            if inline.group(1).strip():
+                bucket.append(inline.group(1).strip())
             continue
         if ONLINE_LABEL.match(line):
             bucket = online

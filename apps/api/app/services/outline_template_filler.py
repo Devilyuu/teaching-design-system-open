@@ -27,7 +27,7 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 
 from app.services.course_standard_assessment import CourseAssessments, assessment_rows
-from app.services.course_standard_resources import CourseResources, resource_lines
+from app.services.course_standard_resources import MISSING, CourseResources, resource_lines
 from app.services.lesson_template_filler import (
     GENERATED_MARK_COLOR,
     dominant_run_properties,
@@ -36,6 +36,8 @@ from app.services.lesson_template_filler import (
 
 
 GENERATED_PLACEHOLDER = re.compile(r"【\s*AI\s*生成[^】]*】")
+# 「[1] 」 and 「1．」 -- an entry the standard already numbers is not numbered again.
+LEADING_NUMBER = re.compile(r"^\s*(\[\d+\]|\d{1,2}\s*[.．、])")
 SECTION_HEADING = re.compile(r"^\s*[一二三四五六七八九十]+\s*[、.．]")
 SUBSECTION_HEADING = re.compile(r"^\s*[（(]\s*[一二三四五六七八九十]+\s*[）)]")
 
@@ -48,15 +50,18 @@ class OutlineTemplateError(ValueError):
 class _ParagraphSlot:
     """Where one generated paragraph goes.
 
-    ``label`` is text the template writes ahead of the marker on the same line
-    (「课程简介：」); ``heading`` is the 一、/（一） heading in force above it.
-    Sections that carry a label are told apart by it, the rest by their heading.
+    ``label`` is text the template writes ahead of the marker, either on the
+    same line (「课程简介：」) or as the line above it (「教材：」 heading a list);
+    ``heading`` is the 一、/（一） heading in force above it. Sections that carry
+    a label are told apart by it, the rest by their heading. ``numbered`` lists
+    are written 「[1] 」「[2] 」 as the school's finished outlines cite them.
     """
 
     field: str
     label: str = ""
     heading: str = ""
     repeat: bool = False
+    numbered: bool = False
 
 
 # In template order. 五、学习资源 is copied from the course standard rather than
@@ -66,11 +71,11 @@ PARAGRAPH_SLOTS: tuple[_ParagraphSlot, ...] = (
     _ParagraphSlot("teaching_strategy", label="教学策略"),
     _ParagraphSlot("prerequisites", label="先修要求"),
     _ParagraphSlot("learning_outcomes", heading="预期学习成果", repeat=True),
-    _ParagraphSlot("教材", label="教材", repeat=True),
-    _ParagraphSlot("教辅", label="教辅", repeat=True),
+    _ParagraphSlot("教材", label="教材", repeat=True, numbered=True),
+    _ParagraphSlot("教辅", label="教辅", repeat=True, numbered=True),
     _ParagraphSlot("在线学习资源", heading="在线学习资源", repeat=True),
     _ParagraphSlot("高质量作业范例", heading="作业范例", repeat=True),
-    _ParagraphSlot("参考书目", heading="参考书目", repeat=True),
+    _ParagraphSlot("参考书目", heading="参考书目", repeat=True, numbered=True),
     _ParagraphSlot("study_advice", heading="学习方法"),
     _ParagraphSlot("academic_integrity", heading="学术诚信"),
     _ParagraphSlot("attendance", heading="出勤"),
@@ -121,11 +126,11 @@ def fill_outline_sections(
 
     written = False
     used: set[int] = set()
-    for paragraph, heading in _marked_paragraphs(document):
+    for paragraph, heading, lead_in in _marked_paragraphs(document):
         marker = GENERATED_PLACEHOLDER.search(paragraph.text)
         if marker is None:
             continue
-        matched = _match_slot(heading, paragraph.text[: marker.start()], used)
+        matched = _match_slot(heading, paragraph.text[: marker.start()], lead_in, used)
         if matched is None:
             continue
         index, slot = matched
@@ -150,7 +155,7 @@ def find_unfilled_generated_sections(document) -> list[str]:
     """
     stale = [
         (heading or paragraph.text.strip())[:24]
-        for paragraph, heading in _marked_paragraphs(document)
+        for paragraph, heading, _lead_in in _marked_paragraphs(document)
     ]
     for table in document.tables:
         for row in table.rows:
@@ -195,11 +200,13 @@ def _normalize(value: str) -> str:
     return "".join(value.split())
 
 
-def _marked_paragraphs(document) -> list[tuple[Paragraph, str]]:
-    """Marked paragraphs, each with the headings in force above it."""
-    found: list[tuple[Paragraph, str]] = []
+def _marked_paragraphs(document) -> list[tuple[Paragraph, str, str]]:
+    """Marked paragraphs, each with the headings in force above it and the
+    unmarked line just before it -- 「教材：」 heads its list from its own line."""
+    found: list[tuple[Paragraph, str, str]] = []
     section = ""
     subsection = ""
+    lead_in = ""
     for paragraph in document.paragraphs:
         text = paragraph.text.strip()
         if GENERATED_PLACEHOLDER.search(text) is None:
@@ -207,8 +214,10 @@ def _marked_paragraphs(document) -> list[tuple[Paragraph, str]]:
                 section, subsection = text, ""
             elif SUBSECTION_HEADING.match(text):
                 subsection = text
+            lead_in = text
             continue
-        found.append((paragraph, f"{section} {subsection}".strip()))
+        found.append((paragraph, f"{section} {subsection}".strip(), lead_in))
+        lead_in = ""
     return found
 
 
@@ -226,11 +235,11 @@ def _row_is_marked(row) -> bool:
     return any(GENERATED_PLACEHOLDER.search(cell.text) for cell in row.cells)
 
 
-def _match_slot(heading: str, prefix: str, used: set[int]) -> tuple[int, _ParagraphSlot] | None:
+def _match_slot(heading: str, prefix: str, lead_in: str, used: set[int]) -> tuple[int, _ParagraphSlot] | None:
     for index, slot in enumerate(PARAGRAPH_SLOTS):
         if index in used:
             continue
-        if slot.label and slot.label not in prefix:
+        if slot.label and slot.label not in prefix and not lead_in.startswith(slot.label):
             continue
         if slot.heading and slot.heading not in heading:
             continue
@@ -246,6 +255,8 @@ def _write_slot(paragraph: Paragraph, slot: _ParagraphSlot, value: Any) -> None:
     if not items:
         paragraph._p.getparent().remove(paragraph._p)
         return
+    if slot.numbered:
+        items = _numbered(items)
     # The template holds one line and says to copy it per item, so the second
     # entry keeps the first one's indent and spacing rather than the default.
     # Its label does not come along: 「教辅：」 heads the list once, as it does in
@@ -253,6 +264,17 @@ def _write_slot(paragraph: Paragraph, slot: _ParagraphSlot, value: Any) -> None:
     clones = _repeat_paragraph(paragraph, len(items))
     for position, (written, clone) in enumerate(zip(items, clones)):
         _write_placeholder(clone, written, from_line_start=position > 0)
+
+
+def _numbered(items: list[str]) -> list[str]:
+    """「[1] 」 ahead of each citation, the way the finished outlines cite.
+
+    The standard's own numbering, where it has one, is kept as it is; and the
+    line asking the teacher to supply the entry is a note, not a citation.
+    """
+    if any(LEADING_NUMBER.match(item) for item in items) or items == [MISSING]:
+        return items
+    return [f"[{position}] {item.strip()}" for position, item in enumerate(items, start=1)]
 
 
 def _repeat_paragraph(paragraph: Paragraph, count: int) -> list[Paragraph]:
@@ -412,7 +434,15 @@ def _write_table_rows(table: Table, header_index: int, rows: Sequence[_TableRow]
             # and a merged cell answers to every column it covers.
             cells = row.cells
             if index < len(cells):
-                set_cell_text(cells[index], text, donor)
+                # Each marked cell states its own format -- 教学单元 a size up
+                # from the columns beside it -- so a cell that carries one keeps
+                # it; the table's donor is for a blank cell only.
+                set_cell_text(cells[index], text, None if _has_run_properties(cells[index]) else donor)
+
+
+def _has_run_properties(cell) -> bool:
+    paragraph = cell.paragraphs[0]
+    return bool(paragraph.runs) and paragraph.runs[0]._r.find(qn("w:rPr")) is not None
 
 
 def _clear_vertical_merges(element) -> None:

@@ -137,18 +137,47 @@ def dominant_run_properties(table):
     marked = _most_used(_run_property_tally(table, marked_only=True))
     if marked is not None:
         return marked
-    return _most_used(_run_property_tally(table, marked_only=False))
+    # A template with nothing marked and its content cells blank -- the school's
+    # own 教学实施过程 table -- has only labels left to vote: 黑体 bold headers
+    # across the top and 课前/课中/课后 down the side. The header alone outweighed
+    # the one 宋体 小五 「课中」 cell (the rest of that column is merged into it)
+    # and every generated row came out as a heading. Labels live in the header
+    # row and the first column and announce themselves in bold, so the
+    # regular-weight runs outside those places vote first, and the vote widens
+    # only when they are silent.
+    for skip_header, skip_first_column in ((True, True), (True, False), (False, False)):
+        for regular_weight_only in (True, False):
+            found = _most_used(
+                _run_property_tally(
+                    table,
+                    marked_only=False,
+                    skip_header=skip_header,
+                    skip_first_column=skip_first_column,
+                    regular_weight_only=regular_weight_only,
+                )
+            )
+            if found is not None:
+                return found
+    return None
 
 
-def _run_property_tally(table, marked_only: bool) -> dict[tuple, dict[str, tuple[int, Any]]]:
+def _run_property_tally(
+    table,
+    marked_only: bool,
+    skip_header: bool = False,
+    skip_first_column: bool = False,
+    regular_weight_only: bool = False,
+) -> dict[tuple, dict[str, tuple[int, Any]]]:
     # Walk the runs themselves rather than row.cells: a merged cell is repeated
     # once per grid column it covers and would be counted that many times.
     tally: dict[tuple, dict[str, tuple[int, Any]]] = {}
-    for run in table._tbl.iter(qn("w:r")):
+    for run in _table_runs(table, skip_header, skip_first_column):
         properties = run.find(qn("w:rPr"))
         if properties is None:
             continue
         if marked_only and not _marks_generated_cell(properties):
+            continue
+        if regular_weight_only and _toggled(properties, "w:b"):
             continue
         text = "".join(node.text or "" for node in run.findall(qn("w:t"))).strip()
         if not text:
@@ -159,6 +188,16 @@ def _run_property_tally(table, marked_only: bool) -> dict[tuple, dict[str, tuple
         weight, sample = variants.get(key, (0, colourless))
         variants[key] = (weight + len(text), sample)
     return tally
+
+
+def _table_runs(table, skip_header: bool, skip_first_column: bool):
+    for row_index, row in enumerate(table._tbl.findall(qn("w:tr"))):
+        if skip_header and row_index == 0:
+            continue
+        for cell_index, cell in enumerate(row.findall(qn("w:tc"))):
+            if skip_first_column and cell_index == 0:
+                continue
+            yield from cell.iter(qn("w:r"))
 
 
 def _visible_format(properties) -> tuple:

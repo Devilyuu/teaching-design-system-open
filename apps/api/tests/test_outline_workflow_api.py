@@ -375,6 +375,75 @@ def test_source_review_confirmation_unlocks_outline_generation(tmp_path):
     assert second.status_code == 409
 
 
+def _confirmed_task_with_schedule(client: TestClient, tmp_path) -> int:
+    standard = tmp_path / "standard.docx"
+    talent_plan = tmp_path / "talent-plan.docx"
+    schedule = tmp_path / "schedule.xlsx"
+    make_course_standard_docx(standard)
+    make_talent_plan_docx(talent_plan)
+    make_schedule_xlsx(schedule)
+    task_id = create_task(client)
+    with talent_plan.open("rb") as file:
+        client.post(f"/tasks/{task_id}/talent-plan", files={"file": ("talent-plan.docx", file, "application/octet-stream")})
+    with standard.open("rb") as file:
+        client.post(f"/tasks/{task_id}/course-standard", files={"file": ("standard.docx", file, "application/octet-stream")})
+    assert client.post(f"/tasks/{task_id}/sources/confirm").status_code == 200
+    with schedule.open("rb") as file:
+        client.post(f"/tasks/{task_id}/schedule", files={"file": ("schedule.xlsx", file, "application/octet-stream")})
+    return task_id
+
+
+def test_an_outline_written_while_the_model_was_thinking_is_not_written_twice(tmp_path, monkeypatch):
+    """Two clicks, one outline.
+
+    The first request found no rows, spent minutes at the model, and outlived
+    the proxy timeout; the teacher clicked again. Both wrote a full set, so the
+    outline had two 第 1 次课 and the lesson run made sixteen plans for eight
+    sessions. Whatever lands first is the outline; the other request must say
+    so instead of adding to it.
+    """
+    from app.db import engine
+    from app.models import OutlineRow
+
+    original = task_routes.generate_ai_outline
+
+    def generate_and_get_overtaken(config, evidence):
+        rows = original(config, evidence)
+        with Session(engine) as other:
+            for row in rows:
+                other.add(OutlineRow(task_id=task_id, **row.__dict__))
+            other.commit()
+        return rows
+
+    with TestClient(app) as client:
+        task_id = _confirmed_task_with_schedule(client, tmp_path)
+        monkeypatch.setattr(task_routes, "generate_ai_outline", generate_and_get_overtaken)
+        response = client.post(f"/tasks/{task_id}/outline/generate")
+        listed = client.get(f"/tasks/{task_id}/outline")
+
+    assert response.status_code == 409
+    assert "已由另一次请求写入" in response.json()["detail"]
+    assert [row["session_no"] for row in listed.json()] == [1, 2]
+
+
+def test_a_second_generation_request_is_refused_while_the_first_is_in_flight():
+    """The database check cannot see a request still at the model; the guard can."""
+    from fastapi import HTTPException
+
+    with task_routes._outline_generation_guard(42):
+        with pytest.raises(HTTPException) as refused:
+            with task_routes._outline_generation_guard(42):
+                pass
+        assert refused.value.status_code == 409
+        assert "正在生成中" in refused.value.detail
+        # Another course is not held up by this one.
+        with task_routes._outline_generation_guard(43):
+            pass
+    # Released on exit, so the teacher can generate once the first run is done.
+    with task_routes._outline_generation_guard(42):
+        pass
+
+
 def test_outline_generation_requires_enabled_model(tmp_path):
     standard = tmp_path / "standard.docx"
     schedule = tmp_path / "schedule.xlsx"
