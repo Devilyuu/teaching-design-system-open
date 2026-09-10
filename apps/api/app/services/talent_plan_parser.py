@@ -4,6 +4,8 @@ import re
 
 from docx import Document
 
+from app.services.docx_numbering import cell_text, paragraph_numbers
+
 
 INDICATOR_CODE_RE = re.compile(r"(?<![\d-])(\d+-\d+-\d+)(?![\d-])")
 # The 2024/2025 plans write the group cell as a bare "1-1"; the 2026 plans
@@ -26,17 +28,17 @@ class ParsedTalentPlan:
     indicators: list[ParsedAbilityIndicator]
 
 
-def _cell_text(cell) -> str:
-    return " ".join(cell.text.split())
 
 
 def parse_talent_plan(path: Path | str) -> ParsedTalentPlan:
     doc = Document(str(path))
+    # Auto-numbered codes are invisible to cell.text; see docx_numbering.
+    labels = paragraph_numbers(doc)
     indicators: list[ParsedAbilityIndicator] = []
     seen_codes: set[str] = set()
 
     for table in doc.tables:
-        rows = [[_cell_text(cell) for cell in row.cells] for row in table.rows]
+        rows = [[cell_text(cell, labels) for cell in row.cells] for row in table.rows]
         for header_index, header in enumerate(rows):
             header_text = " ".join(header)
             if not all(

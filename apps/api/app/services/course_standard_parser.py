@@ -4,6 +4,8 @@ import re
 
 from docx import Document
 
+from app.services.docx_numbering import cell_text, paragraph_numbers
+
 ABILITY_CODE_RE = re.compile(r"\d+-\d+-\d+")
 GOAL_CODE_RE = re.compile(r"M\d+")
 # Schools write the hours column either as "理论/实践" (8/4) or as a bare total
@@ -37,17 +39,17 @@ class ParsedCourseStandard:
     projects: list[ParsedCourseProject]
 
 
-def _cell_text(cell) -> str:
-    return " ".join(cell.text.split())
 
 
 def parse_course_standard(path: Path | str) -> ParsedCourseStandard:
     doc = Document(str(path))
+    # Auto-numbered codes are invisible to cell.text; see docx_numbering.
+    labels = paragraph_numbers(doc)
     goals: list[ParsedCourseGoal] = []
     projects: list[ParsedCourseProject] = []
 
     for table in doc.tables:
-        rows = [[_cell_text(cell) for cell in row.cells] for row in table.rows]
+        rows = [[cell_text(cell, labels) for cell in row.cells] for row in table.rows]
         if not rows:
             continue
         header = rows[0]
