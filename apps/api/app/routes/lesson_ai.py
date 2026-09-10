@@ -34,14 +34,14 @@ router = APIRouter(prefix="/tasks", tags=["lesson-ai"])
 def _task_or_404(task_id: int, session: Session, user: User) -> TeachingTask:
     task = session.get(TeachingTask, task_id)
     if task is None or (user.role != "admin" and task.owner_id != user.id):
-        raise HTTPException(status_code=404, detail="Teaching task not found")
+        raise HTTPException(status_code=404, detail="课程不存在或无权访问")
     return task
 
 
 def _run_or_404(task_id: int, run_id: int, session: Session) -> LessonGenerationRun:
     run = session.get(LessonGenerationRun, run_id)
     if run is None or run.task_id != task_id:
-        raise HTTPException(status_code=404, detail="Lesson generation run not found")
+        raise HTTPException(status_code=404, detail="教案生成记录不存在")
     return run
 
 
@@ -136,7 +136,7 @@ def retry_lesson_generation_item(
     run = _run_or_404(task_id, run_id, session)
     item = session.get(LessonGenerationItem, item_id)
     if item is None or item.run_id != run_id:
-        raise HTTPException(status_code=404, detail="Lesson generation item not found")
+        raise HTTPException(status_code=404, detail="该课次的生成记录不存在")
     if item.status != "failed":
         raise HTTPException(status_code=409, detail="只能重试失败的课次")
     item.status = "pending"
@@ -160,7 +160,7 @@ def _candidate_read(candidate: LessonRevisionCandidate) -> LessonRevisionCandida
 def _lesson_or_404(task_id: int, lesson_id: int, session: Session) -> LessonPlan:
     lesson = session.get(LessonPlan, lesson_id)
     if lesson is None or lesson.task_id != task_id:
-        raise HTTPException(status_code=404, detail="Lesson plan not found")
+        raise HTTPException(status_code=404, detail="教案不存在，可能已被重新生成，请刷新页面")
     return lesson
 
 
@@ -232,7 +232,7 @@ def create_lesson_revision_candidate(
 def _candidate_or_404(task_id: int, candidate_id: int, session: Session) -> tuple[LessonRevisionCandidate, LessonPlan]:
     candidate = session.get(LessonRevisionCandidate, candidate_id)
     if candidate is None:
-        raise HTTPException(status_code=404, detail="Lesson revision candidate not found")
+        raise HTTPException(status_code=404, detail="教案修改建议不存在或已处理")
     lesson = _lesson_or_404(task_id, candidate.lesson_plan_id, session)
     return candidate, lesson
 

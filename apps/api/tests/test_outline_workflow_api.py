@@ -318,7 +318,7 @@ def test_outline_generation_requires_source_confirmation():
         response = client.post(f"/tasks/{task_id}/outline/generate")
 
     assert response.status_code == 400
-    assert "confirm" in response.json()["detail"].lower()
+    assert "确认课程依据" in response.json()["detail"]
 
 
 def test_source_review_confirmation_unlocks_outline_generation(tmp_path):
@@ -552,7 +552,7 @@ def test_reuploading_course_standard_invalidates_confirmation(tmp_path):
     assert review["can_confirm"] is True
     assert review["confirmed"] is False
     assert generation.status_code == 400
-    assert "confirm" in generation.json()["detail"].lower()
+    assert "确认课程依据" in generation.json()["detail"]
 
 
 def test_empty_source_uploads_do_not_replace_confirmed_data(tmp_path):

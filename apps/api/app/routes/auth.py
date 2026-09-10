@@ -15,7 +15,7 @@ MIN_PASSWORD_LENGTH = 8
 def login(payload: LoginRequest, session: Session = Depends(get_session)) -> TokenResponse:
     user = session.exec(select(User).where(User.employee_no == payload.employee_no)).first()
     if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid employee number or password")
+        raise HTTPException(status_code=401, detail="工号或密码不正确")
     return TokenResponse(access_token=create_access_token(user))
 
 

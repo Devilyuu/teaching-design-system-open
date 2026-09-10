@@ -124,6 +124,7 @@ from app.services.task_material_store import (
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+TEMPLATE_KIND_ZH = {"outline": "课程实施大纲", "lesson": "教案"}
 TASK_FILE_DIR = Path(os.getenv("TASK_FILE_DIR", os.getenv("UPLOAD_DIR", "uploads"))) / "task-files"
 TEMPLATE_FILES = {
     "outline": "outline_template.docx",
@@ -158,7 +159,7 @@ def create_task(
     if major_id is not None:
         major = session.get(Major, major_id)
         if major is None or not major.is_active:
-            raise HTTPException(status_code=400, detail="Major not found")
+            raise HTTPException(status_code=400, detail="所选专业不存在，请重新选择")
         data["major"] = major.name
     if current_user.role == "teacher":
         data["teacher_name"] = current_user.name
@@ -195,7 +196,7 @@ def update_task(
     if data.get("major_id") is not None:
         major = session.get(Major, data["major_id"])
         if major is None or not major.is_active:
-            raise HTTPException(status_code=400, detail="Major not found")
+            raise HTTPException(status_code=400, detail="所选专业不存在，请重新选择")
         data["major"] = major.name
     # Same rule as creation: a teacher's courses carry their own name.
     if current_user.role == "teacher":
@@ -487,7 +488,7 @@ def confirm_sources(
     _get_task_or_404(task_id, session, current_user)
     review = _source_review(task_id, session)
     if not review.can_confirm:
-        detail = "Course goals and ability indicators are required"
+        detail = "请先上传课程标准和人才培养方案，再确认课程依据"
         if review.unknown_codes:
             detail = f"Unknown ability codes: {', '.join(review.unknown_codes)}"
         raise HTTPException(status_code=400, detail=detail)
@@ -772,7 +773,7 @@ def generate_outline(
 ) -> list[OutlineRow]:
     task = _get_task_or_404(task_id, session, current_user)
     if session.get(SourceConfirmation, task_id) is None:
-        raise HTTPException(status_code=400, detail="Confirm course sources before generating outline")
+        raise HTTPException(status_code=400, detail="请先在「课程资料」页确认课程依据，再生成课程实施大纲")
     existing = session.exec(select(OutlineRow).where(OutlineRow.task_id == task_id)).first()
     if existing is not None:
         raise HTTPException(status_code=409, detail="课程实施大纲已存在，请使用单次课局部优化")
@@ -901,7 +902,7 @@ def update_outline_row(
     _get_task_or_404(task_id, session, current_user)
     row = session.get(OutlineRow, row_id)
     if row is None or row.task_id != task_id:
-        raise HTTPException(status_code=404, detail="Outline row not found")
+        raise HTTPException(status_code=404, detail="大纲课次不存在，可能已被重新生成，请刷新页面")
     _validate_outline_code_selection(task_id, payload.course_goal_codes, payload.ability_codes, session)
     for key, value in payload.model_dump().items():
         setattr(row, key, value)
@@ -1035,7 +1036,7 @@ def generate_lessons(
         select(OutlineRow).where(OutlineRow.task_id == task_id).order_by(OutlineRow.session_no)
     ).all()
     if not outline_rows:
-        raise HTTPException(status_code=400, detail="Outline rows are required")
+        raise HTTPException(status_code=400, detail="课程实施大纲尚未生成，请先在「课程实施大纲」页生成大纲，再生成整门课教案")
 
     active_reflections = session.exec(
         select(PostClassReflection).where(
@@ -1105,7 +1106,7 @@ def update_lesson(
     _get_task_or_404(task_id, session, current_user)
     lesson = session.get(LessonPlan, lesson_id)
     if lesson is None or lesson.task_id != task_id:
-        raise HTTPException(status_code=404, detail="Lesson plan not found")
+        raise HTTPException(status_code=404, detail="教案不存在，可能已被重新生成，请刷新页面")
     for key, value in payload.model_dump().items():
         setattr(lesson, key, value)
     session.add(lesson)
@@ -1182,7 +1183,7 @@ def upsert_reflection(
         )
     ).first()
     if existing is not None and existing.status == "applied":
-        raise HTTPException(status_code=409, detail="Revert the applied adjustment before editing")
+        raise HTTPException(status_code=409, detail="这份教案已应用课后调整，请先撤销调整再修改")
 
     suggestion = generate_adjustment_suggestion(
         payload.progress_status,
@@ -1228,7 +1229,7 @@ def delete_reflection(
     _get_task_or_404(task_id, session, current_user)
     reflection = _get_reflection_or_404(task_id, reflection_id, session)
     if reflection.status == "applied":
-        raise HTTPException(status_code=409, detail="Revert the applied adjustment before deleting")
+        raise HTTPException(status_code=409, detail="这份教案已应用课后调整，请先撤销调整再删除")
     session.delete(reflection)
     session.commit()
     return Response(status_code=204)
@@ -1244,14 +1245,14 @@ def apply_reflection(
     _get_task_or_404(task_id, session, current_user)
     reflection = _get_reflection_or_404(task_id, reflection_id, session)
     if reflection.target_outline_row_id is None:
-        raise HTTPException(status_code=409, detail="This is the final session")
+        raise HTTPException(status_code=409, detail="这是最后一次课，没有下一课可以接入调整")
     lesson = _get_lesson_by_outline(task_id, reflection.target_outline_row_id, session)
     if lesson is None:
-        raise HTTPException(status_code=409, detail="Generate the next lesson plan before applying")
+        raise HTTPException(status_code=409, detail="下一课的教案尚未生成，请先生成再应用调整")
     if reflection.status == "applied":
         return lesson
     if reflection.suggestion_type == "none":
-        raise HTTPException(status_code=409, detail="This reflection does not require an adjustment")
+        raise HTTPException(status_code=409, detail="这条课后反思不需要调整下一课")
     source = _get_outline_row_or_404(task_id, reflection.outline_row_id, session)
     assert reflection.id is not None
     lesson.teaching_process = build_adjustment_block(
@@ -1282,10 +1283,10 @@ def revert_reflection(
     _get_task_or_404(task_id, session, current_user)
     reflection = _get_reflection_or_404(task_id, reflection_id, session)
     if reflection.target_outline_row_id is None:
-        raise HTTPException(status_code=409, detail="This reflection has no target session")
+        raise HTTPException(status_code=409, detail="这条课后反思没有对应的下一课")
     lesson = _get_lesson_by_outline(task_id, reflection.target_outline_row_id, session)
     if lesson is None:
-        raise HTTPException(status_code=409, detail="The target lesson plan is not available")
+        raise HTTPException(status_code=409, detail="要调整的下一课教案不可用，请刷新页面后重试")
     if reflection.status == "applied":
         lesson.teaching_process = remove_adjustment_block(lesson.teaching_process, reflection_id)
         reflection.status = "reverted"
@@ -1504,7 +1505,7 @@ async def export_lessons_docx(
         select(LessonPlan).where(LessonPlan.task_id == task_id).order_by(LessonPlan.session_no)
     ).all()
     if not lessons:
-        raise HTTPException(status_code=400, detail="Lesson plans are required")
+        raise HTTPException(status_code=400, detail="整门课教案尚未生成，请先在「整门课教案」页生成后再导出")
 
     outline_rows = session.exec(
         select(OutlineRow).where(OutlineRow.task_id == task_id).order_by(OutlineRow.session_no)
@@ -1584,7 +1585,7 @@ async def export_outline_docx(
         select(OutlineRow).where(OutlineRow.task_id == task_id).order_by(OutlineRow.session_no)
     ).all()
     if not rows:
-        raise HTTPException(status_code=400, detail="Outline rows are required")
+        raise HTTPException(status_code=400, detail="课程实施大纲尚未生成，请先在「课程实施大纲」页生成后再导出")
 
     template = await _resolve_template_path(task_id, "outline", file, session)
     # A template that marks nothing needs no body written and no model call; a
@@ -1815,14 +1816,14 @@ def _no_sessions_detail(analysis, course_filter: str | None) -> dict:
 def _get_task_or_404(task_id: int, session: Session, current_user: User) -> TeachingTask:
     task = session.get(TeachingTask, task_id)
     if task is None or (current_user.role != "admin" and task.owner_id != current_user.id):
-        raise HTTPException(status_code=404, detail="Teaching task not found")
+        raise HTTPException(status_code=404, detail="课程不存在或无权访问")
     return task
 
 
 def _get_outline_row_or_404(task_id: int, outline_row_id: int, session: Session) -> OutlineRow:
     row = session.get(OutlineRow, outline_row_id)
     if row is None or row.task_id != task_id:
-        raise HTTPException(status_code=404, detail="Outline row not found")
+        raise HTTPException(status_code=404, detail="大纲课次不存在，可能已被重新生成，请刷新页面")
     return row
 
 
@@ -1841,7 +1842,7 @@ def _get_reflection_or_404(
 ) -> PostClassReflection:
     reflection = session.get(PostClassReflection, reflection_id)
     if reflection is None or reflection.task_id != task_id:
-        raise HTTPException(status_code=404, detail="Post-class reflection not found")
+        raise HTTPException(status_code=404, detail="课后反思不存在")
     return reflection
 
 
@@ -1861,7 +1862,7 @@ def _get_lesson_by_outline(
 def _get_material_or_404(task_id: int, material_id: int, session: Session) -> SessionMaterial:
     material = session.get(SessionMaterial, material_id)
     if material is None or material.task_id != task_id:
-        raise HTTPException(status_code=404, detail="Session material not found")
+        raise HTTPException(status_code=404, detail="课次材料不存在")
     return material
 
 
@@ -1962,13 +1963,13 @@ async def _resolve_template_path(task_id: int, kind: str, file: UploadFile | Non
         return ResolvedTemplate(Path(asset.storage_path), asset.original_filename)
     if target_path.exists():
         return ResolvedTemplate(target_path, target_path.name)
-    raise HTTPException(status_code=400, detail=f"{kind} template is required")
+    raise HTTPException(status_code=400, detail=f"缺少{TEMPLATE_KIND_ZH.get(kind, kind)}模板，请先在「课程资料」页上传学校模板")
 
 
 def _task_template_path(task_id: int, kind: str) -> Path:
     filename = TEMPLATE_FILES.get(kind)
     if filename is None:
-        raise HTTPException(status_code=404, detail="Template kind not found")
+        raise HTTPException(status_code=404, detail="不支持的模板类型")
     return TASK_FILE_DIR / str(task_id) / filename
 
 

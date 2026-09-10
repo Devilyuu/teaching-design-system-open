@@ -1218,7 +1218,16 @@ function OutlineEditor({
           >
             <RefreshCw className="icon" />{sectionsBusy ? "正在重写正文..." : "重写大纲正文"}
           </button>
-          <button className="btn primary" disabled={dirtyRowIds.size > 0} onClick={onExport}><Download className="icon" />导出课程实施大纲</button>
+          {/* Exporting before generation only earns a refusal from the API;
+              greying the button says the same thing without a round trip. */}
+          <button
+            className="btn primary"
+            disabled={rows.length === 0 || dirtyRowIds.size > 0}
+            title={rows.length === 0 ? "请先生成课程实施大纲" : undefined}
+            onClick={onExport}
+          >
+            <Download className="icon" />导出课程实施大纲
+          </button>
         </div>
       </div>
       <div className="layout-aside-main outline-layout">
@@ -1502,7 +1511,12 @@ function LessonPage({
         <div className="status-line">
           <LessonGenerationProgress taskId={task.id} compact onCompleted={onGenerationComplete} onNotice={onNotice} onError={onError} />
           <span className={`tag ${dirtyLessonIds.size ? "amber" : "green"}`}>{dirtyLessonIds.size ? `${dirtyLessonIds.size} 份教案未保存` : "全部教案已保存"}</span>
-          <button className="btn primary" disabled={dirtyLessonIds.size > 0} onClick={onExport}>
+          <button
+            className="btn primary"
+            disabled={lessons.length === 0 || dirtyLessonIds.size > 0}
+            title={lessons.length === 0 ? "请先生成整门课教案" : undefined}
+            onClick={onExport}
+          >
             <Download className="icon" />导出整门课教案
           </button>
         </div>
