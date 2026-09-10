@@ -233,10 +233,14 @@ function SchedulePreviewPanel({ taskId, candidate, onReload, onError }: {
   );
 }
 
-export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
+export default function CourseMaterialsPage({ task, onOpenOutline, onError, onTaskChanged }: {
   task: TeachingTask;
   onOpenOutline: () => void;
   onError: (message: string) => void;
+  /** The course summary (next session, session count, uploaded flags) lives
+   *  in the parent's task list; without this it keeps showing the old
+   *  timetable until the browser is refreshed. */
+  onTaskChanged?: () => void;
 }) {
   const [readiness, setReadiness] = useState<CourseReadiness | null>(null);
   const [busy, setBusy] = useState("");
@@ -247,6 +251,11 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
 
   async function reload() {
     setReadiness(await getCourseReadiness(task.id));
+  }
+
+  async function reloadAfterChange() {
+    await reload();
+    onTaskChanged?.();
   }
 
   useEffect(() => {
@@ -265,7 +274,7 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
       }
       if (kind === "outline_template") await uploadTemplate(task.id, "outline", file);
       if (kind === "lesson_template") await uploadTemplate(task.id, "lesson", file);
-      await reload();
+      await reloadAfterChange();
       // A timetable is not accepted until it is confirmed, and the panel that
       // asks is off-screen; leaving the teacher on the list reads as failure.
       if (kind === "schedule") revealSchedulePanel();
@@ -289,7 +298,7 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
         await generateOutline(task.id);
         onOpenOutline();
       }
-      await reload();
+      await reloadAfterChange();
     } catch (error) {
       onError(error instanceof Error ? error.message : "操作失败");
     } finally {
@@ -351,7 +360,21 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
                 {/* Re-uploading stays available: a pending timetable may be the wrong file. */}
                 {awaiting && <button className="btn primary" onClick={revealSchedulePanel}>去确认</button>}
                 <label className={`btn material-upload ${busy === kind ? "disabled" : ""}`}><Upload className="icon" />{busy === kind ? "上传中" : state.status === "ready" || awaiting ? "替换" : "上传"}
-                  <input aria-label={`上传${label}`} type="file" accept={accept} disabled={busy === kind} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(kind, file); }} />
+                  <input
+                    aria-label={`上传${label}`}
+                    type="file"
+                    accept={accept}
+                    disabled={busy === kind}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      // The registrar re-exports the timetable under the same
+                      // file name, and a file input only fires change when the
+                      // name differs from the one it still holds -- so the
+                      // second upload silently did nothing.
+                      event.target.value = "";
+                      if (file) void upload(kind, file);
+                    }}
+                  />
                 </label>
               </div>
             </div>;
@@ -380,7 +403,7 @@ export default function CourseMaterialsPage({ task, onOpenOutline, onError }: {
         <SchedulePreviewPanel
           taskId={task.id}
           candidate={readiness.pending_schedule}
-          onReload={reload}
+          onReload={reloadAfterChange}
           onError={onError}
         />
       )}

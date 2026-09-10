@@ -313,6 +313,15 @@ export default function App() {
     }
   }
 
+  /** Re-read the course summaries without touching the selection, unlike loadTasks. */
+  async function refreshTasks() {
+    try {
+      setTasks(await listTasks());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "课程列表刷新失败");
+    }
+  }
+
   async function reloadLessonsAfterGeneration() {
     if (!selectedTask) return;
     const lessons = await listLessonPlans(selectedTask.id);
@@ -516,6 +525,7 @@ export default function App() {
                   task={selectedTask}
                   onOpenOutline={() => setWorkspaceTab("outline")}
                   onError={setError}
+                  onTaskChanged={() => void refreshTasks()}
                 />
               )}
               {workspaceTab === "outline" && (

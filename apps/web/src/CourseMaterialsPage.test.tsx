@@ -321,3 +321,35 @@ it("still reports other upload failures through the page error", async () => {
   expect(onError).toHaveBeenCalledWith("课表缺少必需的列：节次。");
   expect(screen.queryByRole("alert", { name: "课表课程名不一致" })).not.toBeInTheDocument();
 });
+
+it("accepts the same file name a second time, as the registrar re-exports under one name", async () => {
+  const user = userEvent.setup();
+  Element.prototype.scrollIntoView = vi.fn();
+  uploadScheduleCandidate.mockResolvedValue(candidate);
+  render(<CourseMaterialsPage task={task} onOpenOutline={vi.fn()} onError={vi.fn()} />);
+
+  const input = (await screen.findByLabelText("上传教务课表")) as HTMLInputElement;
+  await user.upload(input, new File(["v1"], "1001张明课表.xls"));
+  expect(uploadScheduleCandidate).toHaveBeenCalledTimes(1);
+  // A file input only fires change when the selection differs from what it
+  // still holds; clearing it is what lets the corrected export go through.
+  expect(input.value).toBe("");
+  expect(input.files).toHaveLength(0);
+
+  await user.upload(input, new File(["v2"], "1001张明课表.xls"));
+  expect(uploadScheduleCandidate).toHaveBeenCalledTimes(2);
+});
+
+it("tells the parent the course summary changed once the new timetable is confirmed", async () => {
+  const user = userEvent.setup();
+  confirmScheduleCandidate.mockResolvedValue({ ...candidate, status: "applied" });
+  const onTaskChanged = vi.fn();
+  render(<CourseMaterialsPage task={task} onOpenOutline={vi.fn()} onError={vi.fn()} onTaskChanged={onTaskChanged} />);
+
+  const panel = await screen.findByRole("region", { name: "新课表待确认" });
+  expect(onTaskChanged).not.toHaveBeenCalled();
+  await user.click(within(panel).getByRole("button", { name: "确认使用新课表" }));
+
+  expect(confirmScheduleCandidate).toHaveBeenCalledWith(1, 5);
+  expect(onTaskChanged).toHaveBeenCalledTimes(1);
+});
