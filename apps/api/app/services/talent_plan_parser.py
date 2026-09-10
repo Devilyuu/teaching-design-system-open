@@ -6,7 +6,11 @@ from docx import Document
 
 
 INDICATOR_CODE_RE = re.compile(r"(?<![\d-])(\d+-\d+-\d+)(?![\d-])")
-GROUP_CODE_RE = re.compile(r"\d+-\d+")
+# The 2024/2025 plans write the group cell as a bare "1-1"; the 2026 plans
+# append the group's name ("1-1 艺术设计基础知识"). Anchor on the leading code
+# and refuse a third segment so an indicator code ("1-1-10") is never taken
+# for a group.
+GROUP_CODE_RE = re.compile(r"^(\d+-\d+)(?![\d-])")
 
 
 @dataclass(frozen=True)
@@ -46,10 +50,11 @@ def parse_talent_plan(path: Path | str) -> ParsedTalentPlan:
                 if len(row) < 2:
                     continue
 
-                category, group_code = row[0], row[1]
-                if GROUP_CODE_RE.fullmatch(group_code) is not None:
-                    current_group_code = group_code
-                elif group_code:
+                category, group_cell = row[0], row[1]
+                group_match = GROUP_CODE_RE.match(group_cell)
+                if group_match is not None:
+                    current_group_code = group_match.group(1)
+                elif group_cell:
                     current_category = ""
                     current_group_code = ""
                     continue

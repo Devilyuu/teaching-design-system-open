@@ -16,9 +16,17 @@ from app.services.schedule_parser import select_course_names
 WEEKDAY_CHARS = ("一", "二", "三", "四", "五", "六", "日")
 WEEKDAY_HEADERS = tuple(f"星期{char}" for char in WEEKDAY_CHARS)
 
-# 课程<>周次<>校区地点<>教师<>教学班<>课堂名称<>教学班组成<>板块等级<>场地类别
-FIELD_COURSE, FIELD_WEEKS, FIELD_LOCATION, FIELD_TEACHER, FIELD_CLASS = 0, 1, 2, 3, 4
-FIELD_COMPOSITION = 6
+# The registrar changes what an entry carries between exports. Seen so far:
+#   课程<>周次<>校区地点<>教师<>教学班<>课堂名称<>教学班组成<>板块等级<>场地类别
+#   课程<>课程号<>周次<>校区地点<>教师<>[专业方向]<>教学班<>课堂名称<>教学班组成<>课程总学时<>...
+# 专业方向 is dropped entirely (not left blank) when a course has none, so fixed
+# positions cannot work. Fields are located by shape instead: the weeks field
+# is the one that looks like "(1-2节)1-5周", the teaching class is the first
+# later field ending in the registrar's "-0003" suffix, and the location and
+# teacher always follow the weeks; the composition always sits two after the
+# teaching class, past 课堂名称.
+WEEKS_RE = re.compile(r"\((?P<periods>[^)]*?)节?\)(?P<weeks>.*周.*)")
+TEACHING_CLASS_RE = re.compile(r".+-\d{3,4}$")
 
 
 class RegistrarParseError(ValueError):
@@ -85,18 +93,33 @@ def split_cell_entries(text: str) -> list[CellEntry]:
         parts = [part.strip() for part in line.split("/")]
         if len(parts) < 2:
             continue
-        matched = re.match(r"\((?P<periods>[^)]*?)节?\)(?P<weeks>.+)", parts[FIELD_WEEKS])
+        weeks_index, matched = next(
+            (
+                (index, match)
+                for index, match in ((i, WEEKS_RE.match(p)) for i, p in enumerate(parts[1:], 1))
+                if match is not None
+            ),
+            (None, None),
+        )
         if matched is None:
             continue
+
+        def part_at(index: int) -> str:
+            return parts[index] if index < len(parts) else ""
+
+        class_index = next(
+            (i for i in range(weeks_index + 3, len(parts)) if TEACHING_CLASS_RE.match(parts[i])),
+            weeks_index + 3,
+        )
         entries.append(
             CellEntry(
-                course_name=parts[FIELD_COURSE],
+                course_name=parts[0],
                 periods=matched.group("periods").strip(),
                 weeks=parse_week_spec(matched.group("weeks")),
-                location=parts[FIELD_LOCATION] if len(parts) > FIELD_LOCATION else "",
-                teacher=parts[FIELD_TEACHER] if len(parts) > FIELD_TEACHER else "",
-                teaching_class=parts[FIELD_CLASS] if len(parts) > FIELD_CLASS else "",
-                class_names=parts[FIELD_COMPOSITION] if len(parts) > FIELD_COMPOSITION else "",
+                location=part_at(weeks_index + 1),
+                teacher=part_at(weeks_index + 2),
+                teaching_class=part_at(class_index),
+                class_names=part_at(class_index + 2),
             )
         )
     return entries

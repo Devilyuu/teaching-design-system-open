@@ -172,3 +172,30 @@ def test_invalid_nonempty_group_clears_continuation_context(tmp_path):
     result = parse_talent_plan(path)
 
     assert [item.code for item in result.indicators] == ["1-1-1"]
+
+
+def test_group_cell_may_carry_the_group_name(tmp_path):
+    """2026 plans write "1-1 艺术设计基础知识" where older ones wrote "1-1"."""
+    path = tmp_path / "named-groups.docx"
+    doc = Document()
+    table = doc.add_table(rows=4, cols=4)
+    table.cell(0, 1).text = "培养规格代码"
+    table.cell(0, 2).text = "TOP10"
+    table.cell(0, 3).text = "其他"
+    table.cell(1, 0).text = "知识点"
+    table.cell(1, 1).text = "1-1 艺术设计基础知识"
+    table.cell(1, 2).text = "1-1-1 理解艺术设计的基本概念 1-1-2 掌握造型基础"
+    table.cell(2, 0).text = "知识点"
+    table.cell(2, 1).text = "1-10 知识产权、安全与科技伦理知识"
+    table.cell(2, 2).text = "1-10-1 掌握著作权的基本知识"
+    table.cell(3, 0).text = "能力点"
+    table.cell(3, 1).text = "2-1-3 不是分组而是指标编号"
+    table.cell(3, 2).text = "2-1-4 不应被收进任何分组"
+    doc.save(path)
+
+    result = parse_talent_plan(path)
+
+    assert [item.code for item in result.indicators] == ["1-1-1", "1-1-2", "1-10-1"]
+    assert result.indicators[0].group_code == "1-1"
+    assert result.indicators[2].group_code == "1-10"
+    assert result.indicators[2].description == "掌握著作权的基本知识"

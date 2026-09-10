@@ -332,7 +332,13 @@ async def upload_course_standard(
         temp_path.unlink(missing_ok=True)
 
     if not parsed.goals:
-        raise HTTPException(status_code=400, detail="Course standard goals are required")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "课程标准里未识别到课程目标表：需要一张第一行含「编号」和「课程目标」的表格，"
+                "编号写成 M1、M2……，请检查后重新上传"
+            ),
+        )
     # Without projects the outline can never be generated, and there is no
     # manual entry path. Say so now instead of marking the material "ready"
     # and failing at generation time.
@@ -417,7 +423,13 @@ async def upload_talent_plan(
         temp_path.unlink(missing_ok=True)
 
     if not parsed.indicators:
-        raise HTTPException(status_code=400, detail="Talent plan indicators are required")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "人才培养方案里未识别到培养规格表：需要一张表头含「培养规格代码」「TOP10」「其他」的表格，"
+                "代码列写成 1-1（可跟名称），指标逐条编号为 1-1-1、1-1-2……，请检查后重新上传"
+            ),
+        )
 
     assert current_user.id is not None
     asset_path = write_unique_asset(TASK_FILE_DIR, task_id, "talent_plan", suffix, content)

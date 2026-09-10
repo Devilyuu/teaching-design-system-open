@@ -191,3 +191,35 @@ def test_term_length_ignores_per_course_week_counts_in_the_footnote():
     ])
 
     assert parse_registrar_matrix(sheet).total_weeks == 18
+
+
+def test_reads_the_export_that_inserts_a_course_code_and_total_hours():
+    """The 2026-09-10 export adds 课程号 after the course and 课程总学时 after the
+    composition; the fixed-position reader saw the course code where it expected
+    the weeks and dropped every entry."""
+    entry = split_cell_entries(
+        "字体设计/12012006060/(1-2节)1-2周,4周/示例校区 教学楼304/张明/"
+        "字体设计-0004//视觉244/48/ /创意专业教室"
+    )[0]
+
+    assert entry.course_name == "字体设计"
+    assert entry.periods == "1-2"
+    assert entry.weeks == [1, 2, 4]
+    assert entry.location == "示例校区 教学楼304"
+    assert entry.teacher == "张明"
+    assert entry.teaching_class == "字体设计-0004"
+    assert entry.class_names == "视觉244"
+
+
+def test_skips_a_major_direction_shown_between_teacher_and_class():
+    entry = split_cell_entries(
+        "字体设计/12012006060/(1-2节)1-2周/示例校区 教学楼304/张明/视觉传达方向/"
+        "字体设计-0004//视觉244/48/ /创意专业教室"
+    )[0]
+
+    assert entry.teaching_class == "字体设计-0004"
+    assert entry.class_names == "视觉244"
+
+
+def test_an_entry_without_a_weeks_field_is_not_an_entry():
+    assert split_cell_entries("字体设计/12012006060/示例校区 教学楼304") == []
