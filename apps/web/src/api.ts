@@ -1,4 +1,6 @@
 import type {
+  TeacherProfile,
+  TeacherProfileUpdate,
   AiModelConfig,
   AiModelConfigUpdate,
   CurrentUser,
@@ -139,6 +141,14 @@ export async function login(employeeNo: string, password: string): Promise<strin
   });
   setStoredToken(response.access_token);
   return response.access_token;
+}
+
+export function getTeacherProfile(): Promise<TeacherProfile> {
+  return request<TeacherProfile>("/auth/profile");
+}
+
+export function updateTeacherProfile(payload: TeacherProfileUpdate): Promise<TeacherProfile> {
+  return request<TeacherProfile>("/auth/profile", { method: "PUT", body: JSON.stringify(payload) });
 }
 
 export function getCurrentUser(): Promise<CurrentUser> {

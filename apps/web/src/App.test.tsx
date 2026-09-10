@@ -167,22 +167,30 @@ const exportRecords = [
   }
 ];
 
-function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean; mustChangePassword?: boolean } = {}) {
+function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean; mustChangePassword?: boolean; teacherWithoutProfile?: boolean } = {}) {
   let lessonsGenerated = false;
   let mustChangePassword = Boolean(options.mustChangePassword);
+  const asTeacher = Boolean(options.teacherWithoutProfile);
+  let profile = { name: asTeacher ? "张老师" : "系统管理员", office_location: "", phone: "", bio: "", complete: false };
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
 
     if (url.endsWith("/auth/me") && (!init || init.method === undefined)) {
-      return jsonResponse({
-        id: 1,
-        employee_no: "admin",
-        name: "系统管理员",
-        role: "admin",
-        is_active: true,
-        must_change_password: mustChangePassword,
-        major_ids: []
-      });
+      return jsonResponse(
+        asTeacher
+          ? { id: 2, employee_no: "T001", name: "张老师", role: "teacher", is_active: true, must_change_password: false, profile_complete: profile.complete, major_ids: [1] }
+          : { id: 1, employee_no: "admin", name: "系统管理员", role: "admin", is_active: true, must_change_password: mustChangePassword, profile_complete: profile.complete, major_ids: [] }
+      );
+    }
+
+    if (url.endsWith("/auth/profile") && (!init || init.method === undefined)) {
+      return jsonResponse(profile);
+    }
+
+    if (url.endsWith("/auth/profile") && init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as { office_location: string; phone: string; bio: string };
+      profile = { ...profile, ...body, complete: Boolean(body.office_location && body.phone && body.bio) };
+      return jsonResponse(profile);
     }
 
     if (url.endsWith("/auth/login") && init?.method === "POST") {
@@ -511,7 +519,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "修改密码" }));
+    await user.click(await screen.findByRole("button", { name: "个人信息与密码" }));
     await user.type(screen.getByLabelText("当前密码"), "Admin@2026!");
     await user.type(screen.getByLabelText("新密码"), "Changed@2026!");
     await user.type(screen.getByLabelText("确认新密码"), "Changed@2026!");
@@ -524,7 +532,7 @@ describe("App", () => {
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "修改密码" }));
+    await user.click(await screen.findByRole("button", { name: "个人信息与密码" }));
     const saveButton = screen.getByRole("button", { name: "保存新密码" });
     expect(saveButton).toBeDisabled();
 
@@ -626,6 +634,25 @@ describe("App", () => {
     await user.type(screen.getByLabelText("新密码"), "Mine@2026!");
     await user.type(screen.getByLabelText("确认新密码"), "Mine@2026!");
     await user.click(screen.getByRole("button", { name: "设置密码并进入系统" }));
+
+    expect(await screen.findByRole("button", { name: "教师工作台" })).toBeInTheDocument();
+  });
+
+  it("keeps a teacher on the profile form until office, phone and biography are filled", async () => {
+    vi.stubGlobal("fetch", mockFetch({ teacherWithoutProfile: true }));
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "请先填写个人信息" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "教师工作台" })).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("教师姓名")).toHaveValue("张老师");
+    expect(screen.getByRole("button", { name: "保存并进入系统" })).toBeDisabled();
+
+    await user.type(screen.getByLabelText("办公地点"), "信息楼316");
+    await user.type(screen.getByLabelText("联系电话"), "13800000000");
+    expect(screen.getByRole("button", { name: "保存并进入系统" })).toBeDisabled();
+    await user.type(screen.getByLabelText("教师简介"), "讲师，研究方向为数字媒体。");
+    await user.click(screen.getByRole("button", { name: "保存并进入系统" }));
 
     expect(await screen.findByRole("button", { name: "教师工作台" })).toBeInTheDocument();
   });

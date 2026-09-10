@@ -41,8 +41,20 @@ export interface CurrentUser {
   is_active: boolean;
   /** Set whenever an admin chose the password; the app forces a change before anything else. */
   must_change_password?: boolean;
+  /** False until office, phone and biography are filled in; the outline's 教师信息 block prints them. */
+  profile_complete?: boolean;
   major_ids: number[];
 }
+
+export interface TeacherProfile {
+  name: string;
+  office_location: string;
+  phone: string;
+  bio: string;
+  complete: boolean;
+}
+
+export type TeacherProfileUpdate = Pick<TeacherProfile, "office_location" | "phone" | "bio">;
 
 export interface Major {
   id: number;

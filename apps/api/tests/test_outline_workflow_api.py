@@ -1265,3 +1265,32 @@ def test_course_standard_without_project_table_is_rejected_at_upload(tmp_path):
     assert response.status_code == 400
     assert "参考课时" in response.json()["detail"]
     assert readiness["materials"]["course_standard"]["status"] == "missing"
+
+
+def test_outline_export_prints_the_owners_profile_in_the_teacher_block(tmp_path, monkeypatch):
+    """The school template leaves 「教师姓名：」「办公地点：」… blank; the export
+    writes the course owner's profile there and the class and room from the
+    course record, and leaves the biography blank rather than inventing one
+    when the profile is missing."""
+    monkeypatch.setattr(task_routes, "TASK_FILE_DIR", tmp_path / "task-files")
+    with TestClient(app) as client:
+        client.headers.update(auth_headers(client))
+        task_id, _ = prepare_outline(client, tmp_path)
+        saved = client.put(
+            "/auth/profile",
+            json={"office_location": "信息楼316", "phone": "13800000000", "bio": "讲师，研究方向为数字媒体。"},
+        )
+        assert saved.status_code == 200
+
+        response = _export_with_school_template(client, task_id)
+        assert response.status_code == 200
+
+    output = tmp_path / "with-profile.docx"
+    output.write_bytes(response.content)
+    text = [paragraph.text for paragraph in Document(output).paragraphs]
+    assert "办公地点：信息楼316" in text
+    assert "联系电话：13800000000" in text
+    assert "教师简介：讲师，研究方向为数字媒体。" in text
+    assert any(line.startswith("教师姓名：") and len(line) > len("教师姓名：") for line in text)
+    assert any(line.startswith("上课班级：") and len(line) > len("上课班级：") for line in text)
+

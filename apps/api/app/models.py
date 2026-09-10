@@ -45,6 +45,22 @@ class UserMajorLink(SQLModel, table=True):
     major_id: int = Field(primary_key=True)
 
 
+class TeacherProfile(SQLModel, table=True):
+    """What the outline's 「教师信息」 block prints about the teacher.
+
+    Kept apart from ``User`` because the admin owns the account (employee
+    number, name, majors) while the teacher owns these lines, and because the
+    outline is the only consumer: it must never guess a phone number or write
+    a biography of its own.
+    """
+
+    user_id: int = Field(primary_key=True)
+    office_location: str = ""
+    phone: str = ""
+    bio: str = ""
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class CourseGoal(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     task_id: int = Field(index=True)

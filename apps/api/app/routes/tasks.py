@@ -95,6 +95,7 @@ from app.services.workbench_import import (
 )
 from app.services.outline_revision import OutlineRevisionError, generate_outline_revision
 from app.services.outline_template_filler import template_marks_generated_sections
+from app.services.teacher_profile import get_profile, outline_teacher_lines
 from app.services.post_class_reflection import (
     build_adjustment_block,
     generate_adjustment_suggestion,
@@ -1594,6 +1595,15 @@ async def export_outline_docx(
     sections = _outline_sections(task, session) if marked else None
     resources, assessments = _course_standard_copies(task_id, session) if marked else (None, None)
 
+    # The 教师信息 block prints the course owner, whoever is exporting: the
+    # profile is theirs and the name is the one on their account.
+    owner = session.get(User, task.owner_id) if task.owner_id else None
+    info_lines = outline_teacher_lines(
+        get_profile(session, owner.id if owner else None),
+        owner.name if owner else task.teacher_name,
+    )
+    info_lines.update({"上课班级": task.class_name, "上课地点": task.location})
+
     with NamedTemporaryFile(delete=False, suffix=".docx") as output_file:
         output_path = Path(output_file.name)
     try:
@@ -1610,6 +1620,7 @@ async def export_outline_docx(
             sections=sections,
             resources=resources,
             assessments=assessments,
+            info_lines=info_lines,
         )
         content = output_path.read_bytes()
     except OutlineTemplateError as exc:

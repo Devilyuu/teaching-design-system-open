@@ -104,6 +104,43 @@ class _TableRow:
     continues_above: tuple[int, ...] = ()
 
 
+LABEL_LINE = re.compile(r"^\s*(?P<label>[^：:]{2,12}?)\s*[：:]\s*(?P<value>.*)$")
+
+
+def fill_label_lines(document, values: dict[str, str]) -> list[str]:
+    """Write 「教师姓名：」-style lines the template leaves blank after the colon.
+
+    The 课程信息 / 教师信息 block carries no marker: the school's template
+    simply prints the label and expects the teacher to type after it. A line
+    that already has something after the colon is the teacher's own and is
+    left alone, so a finished outline used as a template keeps its text.
+    Returns the labels written.
+    """
+    written: list[str] = []
+    for paragraph in document.paragraphs:
+        match = LABEL_LINE.match(paragraph.text)
+        if match is None:
+            continue
+        label = "".join(match.group("label").split())
+        value = values.get(label, "")
+        if not value.strip() or match.group("value").strip():
+            continue
+        _append_after_label(paragraph, value)
+        written.append(label)
+    return written
+
+
+def _append_after_label(paragraph: Paragraph, value: str) -> None:
+    # The label's own run carries the font the school chose for the line, so
+    # the value continues in that run instead of starting a default-styled one.
+    run = paragraph.runs[-1] if paragraph.runs else paragraph.add_run()
+    first, *rest = value.split("\n")
+    run.text = run.text + first
+    for line in rest:
+        run.add_break()
+        run.add_text(line)
+
+
 def template_marks_generated_sections(document) -> bool:
     """Whether this template asks for a generated body at all.
 

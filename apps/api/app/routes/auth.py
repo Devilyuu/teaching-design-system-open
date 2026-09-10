@@ -4,7 +4,16 @@ from sqlmodel import Session, select
 from app.auth import create_access_token, get_current_user, hash_password, user_major_ids, verify_password
 from app.db import get_session
 from app.models import User
-from app.schemas import LoginRequest, PasswordChange, StatusResponse, TokenResponse, UserRead
+from app.schemas import (
+    LoginRequest,
+    PasswordChange,
+    StatusResponse,
+    TeacherProfileRead,
+    TeacherProfileUpdate,
+    TokenResponse,
+    UserRead,
+)
+from app.services.teacher_profile import TeacherProfileError, get_profile, is_complete, save_profile
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -31,8 +40,40 @@ def read_current_user(
         role=current_user.role,
         is_active=current_user.is_active,
         must_change_password=current_user.must_change_password,
+        profile_complete=is_complete(get_profile(session, current_user.id)),
         major_ids=user_major_ids(current_user, session),
     )
+
+
+def _profile_read(current_user: User, profile) -> TeacherProfileRead:
+    return TeacherProfileRead(
+        name=current_user.name,
+        office_location=profile.office_location if profile else "",
+        phone=profile.phone if profile else "",
+        bio=profile.bio if profile else "",
+        complete=is_complete(profile),
+    )
+
+
+@router.get("/profile", response_model=TeacherProfileRead)
+def read_profile(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> TeacherProfileRead:
+    return _profile_read(current_user, get_profile(session, current_user.id))
+
+
+@router.put("/profile", response_model=TeacherProfileRead)
+def update_profile(
+    payload: TeacherProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> TeacherProfileRead:
+    try:
+        profile = save_profile(session, current_user, payload.office_location, payload.phone, payload.bio)
+    except TeacherProfileError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _profile_read(current_user, profile)
 
 
 @router.post("/change-password", response_model=StatusResponse)

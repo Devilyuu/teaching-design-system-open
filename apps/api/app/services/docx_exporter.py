@@ -15,6 +15,7 @@ from app.services.lesson_template_filler import (
     set_cell_text,
 )
 from app.services.outline_template_filler import (
+    fill_label_lines,
     OutlineTemplateError,
     clear_generated_marking,
     fill_outline_sections,
@@ -310,11 +311,14 @@ def fill_outline_docx(
     sections: Any = None,
     resources: Any = None,
     assessments: Any = None,
+    info_lines: dict[str, str] | None = None,
 ) -> None:
     document = Document(str(template_path))
     # After substitution, so a template written with {{课程名称}} resolves to this
     # course instead of looking like it belongs to nobody.
     _replace_placeholders(document, values)
+    if info_lines:
+        fill_label_lines(document, info_lines)
     conflict = _conflicting_course_name(document, str(values.get("课程名称", "") or ""))
     if conflict:
         raise OutlineTemplateError(

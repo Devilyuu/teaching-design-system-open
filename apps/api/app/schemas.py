@@ -35,6 +35,10 @@ class UserRead(BaseModel):
     role: str
     is_active: bool
     must_change_password: bool = False
+    # False until the teacher has filled in what the outline prints about them;
+    # the app keeps a teacher on the profile form until then, as it does for
+    # the initial password.
+    profile_complete: bool = False
     major_ids: list[int] = []
 
 
@@ -73,6 +77,20 @@ class UserBatchItem(BaseModel):
 class UserBatchCreate(BaseModel):
     items: list[UserBatchItem]
     major_ids: list[int] = []
+
+
+class TeacherProfileRead(BaseModel):
+    name: str
+    office_location: str = ""
+    phone: str = ""
+    bio: str = ""
+    complete: bool = False
+
+
+class TeacherProfileUpdate(BaseModel):
+    office_location: str
+    phone: str
+    bio: str
 
 
 class UserBatchResult(BaseModel):

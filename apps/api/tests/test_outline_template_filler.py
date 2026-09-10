@@ -321,3 +321,32 @@ def test_a_template_without_markers_is_left_to_its_own_words(tmp_path):
 
     assert "课程简介：这门课由我自己写。" in _paragraphs(rendered)
     assert rendered.tables[0].cell(1, 0).text == "3.2"
+
+
+def test_label_lines_are_written_after_the_colon_in_the_labels_own_font(tmp_path):
+    from docx import Document
+    from docx.shared import Pt
+
+    from app.services.outline_template_filler import fill_label_lines
+
+    document = Document()
+    document.add_paragraph("（二）教师信息")
+    name_line = document.add_paragraph()
+    name_line.add_run("教师姓名：").font.size = Pt(12)
+    document.add_paragraph("办公地点：")
+    document.add_paragraph("联系电话：13800000000")
+    bio_line = document.add_paragraph("教师简介：")
+    document.add_paragraph("二、课程介绍")
+
+    written = fill_label_lines(
+        document,
+        {"教师姓名": "张明", "办公地点": "信息楼316", "联系电话": "13900000000", "教师简介": "讲师。\n研究方向为数字媒体。", "上课班级": "数字艺术2531"},
+    )
+
+    assert written == ["教师姓名", "办公地点", "教师简介"]
+    assert name_line.text == "教师姓名：张明"
+    assert len(name_line.runs) == 1 and name_line.runs[0].font.size == Pt(12)
+    # The teacher's own number on the template is theirs; the profile does not overwrite it.
+    assert document.paragraphs[3].text == "联系电话：13800000000"
+    assert bio_line.text == "教师简介：讲师。\n研究方向为数字媒体。"
+    assert document.paragraphs[5].text == "二、课程介绍"

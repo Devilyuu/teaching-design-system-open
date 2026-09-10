@@ -28,6 +28,7 @@ import {
   exportLessonPlans,
   exportOutline,
   getCurrentUser,
+  getTeacherProfile,
   getSourceReview,
   getStoredToken,
   listAdminMajors,
@@ -42,10 +43,11 @@ import {
   resetUserPassword,
   updateLessonPlan,
   updateTask,
+  updateTeacherProfile,
   updateUser,
   updateOutlineRow
 } from "./api";
-import type { CurrentUser, LessonPlan, Major, ManagedUser, OutlineRevisionCandidate, OutlineRevisionField, OutlineRow, SourceReview, TeachingTask, TeachingTaskCreate } from "./types";
+import type { CurrentUser, LessonPlan, Major, ManagedUser, OutlineRevisionCandidate, OutlineRevisionField, OutlineRow, SourceReview, TeacherProfile, TeachingTask, TeachingTaskCreate } from "./types";
 import SessionWorkspacePage from "./SessionWorkspacePage";
 import AiModelConfigPanel from "./AiModelConfigPanel";
 import LessonGenerationProgress from "./LessonGenerationProgress";
@@ -62,7 +64,7 @@ const emptyTask: TeachingTaskCreate = {
   major: "数字媒体艺术设计",
   class_name: "数字艺术 25 级 1 班",
   course_name: "人工智能与创意设计",
-  teacher_name: "张明",
+  teacher_name: "",
   location: "智慧教室 / 数字媒体实训室",
   total_hours: 32,
   hours_per_session: 4
@@ -90,8 +92,8 @@ const pageMeta: Record<View, { title: string; subtitle: string }> = {
     subtitle: "管理员维护人才培养方案、课程标准、公共模板、校历和 AI 配置"
   },
   account: {
-    title: "修改密码",
-    subtitle: "更新当前登录账号的密码，保存后旧密码会立即失效"
+    title: "个人信息与密码",
+    subtitle: "个人信息会写入每门课课程实施大纲的「教师信息」；密码修改后旧密码立即失效"
   }
 };
 
@@ -116,6 +118,12 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [error, setError] = useState("");
   const lessonLoadSeq = useRef(0);
+
+  // The course record's 任课教师 is the account holder unless they say otherwise.
+  useEffect(() => {
+    if (!currentUser) return;
+    setTaskDraft((draft) => (draft.teacher_name ? draft : { ...draft, teacher_name: currentUser.name }));
+  }, [currentUser]);
 
   const selectedTask = useMemo(
     () => tasks.find((task) => task.id === selectedTaskId) ?? tasks[0],
@@ -451,6 +459,18 @@ export default function App() {
     );
   }
 
+  // The outline prints the teacher's office, phone and biography from this
+  // profile; a teacher who skips it would export a 教师信息 block with blanks.
+  if (currentUser.role !== "admin" && currentUser.profile_complete === false) {
+    return (
+      <FirstLoginProfilePage
+        currentUser={currentUser}
+        onSaved={async () => setCurrentUser(await getCurrentUser())}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <Sidebar view={view} currentCourse={currentCourse} currentUser={currentUser} onChange={activate} />
@@ -564,7 +584,7 @@ export default function App() {
               onSubmit={handleCreateTask}
             />
           )}
-          {view === "account" && <PasswordPage />}
+          {view === "account" && <AccountPage />}
           {view === "admin" && currentUser.role === "admin" && <AdminPage currentUser={currentUser} />}
         </div>
       </main>
@@ -630,6 +650,100 @@ function FirstLoginPasswordPage({
         </div>
         <p className="auth-hint">现在用的是管理员分配的初始密码。你的课程资料和教案只有你自己能看到，所以请先改成一个只有你知道的密码：至少 8 位，且不能与工号相同。</p>
         <PasswordForm currentLabel="初始密码" submitLabel="设置密码并进入系统" onChanged={onChanged} />
+        <button className="btn" type="button" onClick={onLogout}>退出登录</button>
+      </div>
+    </main>
+  );
+}
+
+function TeacherProfileForm({
+  submitLabel = "保存个人信息",
+  onSaved
+}: {
+  submitLabel?: string;
+  onSaved?: () => Promise<void>;
+}) {
+  const [profile, setProfile] = useState<TeacherProfile | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [formError, setFormError] = useState("");
+
+  useEffect(() => {
+    getTeacherProfile()
+      .then(setProfile)
+      .catch((reason: unknown) => setFormError(reason instanceof Error ? reason.message : "个人信息加载失败"));
+  }, []);
+
+  const canSubmit =
+    profile !== null &&
+    profile.office_location.trim().length > 0 &&
+    profile.phone.trim().length > 0 &&
+    profile.bio.trim().length > 0 &&
+    !saving;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!profile) return;
+    setMessage("");
+    setFormError("");
+    setSaving(true);
+    try {
+      const saved = await updateTeacherProfile({
+        office_location: profile.office_location,
+        phone: profile.phone,
+        bio: profile.bio
+      });
+      setProfile(saved);
+      setMessage("个人信息已保存，课程实施大纲导出时会自动写入「教师信息」");
+      await onSaved?.();
+    } catch (reason) {
+      setFormError(reason instanceof Error ? reason.message : "个人信息保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!profile) {
+    return formError ? <div className="error" role="alert">{formError}</div> : <div role="status">正在加载个人信息...</div>;
+  }
+
+  return (
+    <form className="password-form profile-form" onSubmit={submit}>
+      <label>教师姓名<input value={profile.name} readOnly aria-describedby="profile-name-note" /></label>
+      <div className="plain-note" id="profile-name-note">姓名来自管理员导入的教师名单，需要更正请联系管理员。</div>
+      <label>办公地点<input value={profile.office_location} placeholder="例如：信息楼 316" onChange={(event) => setProfile({ ...profile, office_location: event.target.value })} /></label>
+      <label>联系电话<input value={profile.phone} inputMode="tel" placeholder="手机号或办公电话" onChange={(event) => setProfile({ ...profile, phone: event.target.value })} /></label>
+      <label>教师简介<textarea className="large-textarea" value={profile.bio} placeholder="学历、职称、研究方向、教学与科研经历等，按大纲「教师简介」一栏的写法" onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label>
+      {message && <div className="notice" role="status">{message}</div>}
+      {formError && <div className="error" role="alert">{formError}</div>}
+      <div className="form-actions">
+        <button className="btn primary" type="submit" disabled={!canSubmit}>{saving ? "保存中" : submitLabel}</button>
+      </div>
+    </form>
+  );
+}
+
+function FirstLoginProfilePage({
+  currentUser,
+  onSaved,
+  onLogout
+}: {
+  currentUser: CurrentUser;
+  onSaved: () => Promise<void>;
+  onLogout: () => void;
+}) {
+  return (
+    <main className="auth-shell">
+      <div className="auth-card first-login-card">
+        <div className="brand auth-brand">
+          <div className="brand-mark"><BookOpenCheck /></div>
+          <div>
+            <h1>请先填写个人信息</h1>
+            <p>{currentUser.name} · {currentUser.employee_no}</p>
+          </div>
+        </div>
+        <p className="auth-hint">每门课的课程实施大纲都有一节「教师信息」：教师姓名、办公地点、联系电话、教师简介。填写一次，之后每门课导出大纲时自动写入，以后可在「个人信息与密码」里修改。</p>
+        <TeacherProfileForm submitLabel="保存并进入系统" onSaved={onSaved} />
         <button className="btn" type="button" onClick={onLogout}>退出登录</button>
       </div>
     </main>
@@ -725,7 +839,7 @@ function Topbar({
           </button>
         )}
         <span className="user-chip">{currentUser.name} · {currentUser.employee_no}</span>
-        <button className="btn" onClick={() => onChange("account")}>修改密码</button>
+        <button className="btn" onClick={() => onChange("account")}>个人信息与密码</button>
         <button className="btn" onClick={onLogout}>退出</button>
       </div>
     </header>
@@ -1657,9 +1771,12 @@ function PasswordForm({
   );
 }
 
-function PasswordPage() {
+function AccountPage() {
   return (
     <section className="view active account-layout">
+      <Panel title="个人信息" sub="课程实施大纲「教师信息」一节按这里的内容填写">
+        <TeacherProfileForm />
+      </Panel>
       <Panel title="修改密码" sub="用于当前登录账号">
         <PasswordForm />
       </Panel>
