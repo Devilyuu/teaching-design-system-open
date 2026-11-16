@@ -624,7 +624,11 @@ def _repeat_last_block(document, blocks: list[LessonTemplateBlock], wanted: int)
         previous = children[start - 1]
         if not previous.tag.endswith("}p"):
             break
-        text = "".join(previous.itertext()).strip()
+        # Only the w:t nodes: python-docx gives paragraphs and runs a .text of their
+        # own, so itertext() returned the title once per paragraph, once per run and
+        # once per w:t. A school title Word splits into four runs came out 40-odd
+        # characters long, failed the length bound and was left off every cloned page.
+        text = "".join(node.text or "" for node in previous.iter(qn("w:t"))).strip()
         if not text or PAGE_TITLE_PATTERN.match(text) or re.match(r"^[一二三四五六七八九十]、", text):
             start -= 1
             continue

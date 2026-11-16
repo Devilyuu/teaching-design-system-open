@@ -247,6 +247,34 @@ def test_repeats_a_single_block_template_for_every_session():
     assert titles == [lesson.title for lesson in lessons]
 
 
+def test_every_repeated_block_keeps_the_page_title_word_split_into_runs():
+    """Each session's page opens with the school's centred "<school>教案" title.
+
+    Word splits that title into several runs. Reading it through itertext() counted
+    it once per paragraph, run and w:t, the length check failed, and exports since
+    the school name was taken out of the code carried the title on page one only.
+    """
+    doc = Document()
+    heading = doc.add_paragraph()
+    for piece in ("示范市机电", "职业技术", "学院", "教案"):
+        heading.add_run(piece)
+    _add_lesson_block(doc, "模板课次")
+
+    fill_structured_lesson_template(
+        doc,
+        [_lesson(number) for number in (1, 2, 3)],
+        [{}, {}, {}],
+        {"课程名称": "移动终端APP设计"},
+    )
+
+    titles = [paragraph for paragraph in doc.paragraphs if paragraph.text == "示范市机电职业技术学院教案"]
+    assert len(titles) == 3
+    body = list(doc.element.body)
+    for block in find_lesson_template_blocks(doc):
+        table = doc.tables[block.info_table_index]._tbl
+        assert any(body.index(title._p) == body.index(table) - 1 for title in titles)
+
+
 def test_repeated_blocks_keep_the_template_structure():
     doc = Document()
     _add_lesson_block(doc, "模板课次")
