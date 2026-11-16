@@ -732,6 +732,8 @@ td textarea { min-width: 220px; min-height: 58px; }
 .generation-progress progress { width: 100%; height: 7px; accent-color: var(--blue); }
 .generation-failures { display: grid; gap: 6px; }
 .generation-failures > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid #ffd1d1; background: #fff7f7; }
+.generation-progress.compact .generation-failures { max-height: 180px; overflow-y: auto; gap: 4px; }
+.generation-progress.compact .generation-failures > div { padding: 4px 8px; }
 .text-action { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; border: 0; background: transparent; color: var(--blue); cursor: pointer; padding: 2px 0; }
 .revision-control { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
 .revision-control > input { flex: 1; min-width: 180px; }

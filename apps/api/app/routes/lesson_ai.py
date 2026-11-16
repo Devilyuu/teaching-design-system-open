@@ -82,7 +82,13 @@ def start_lesson_generation_run(
 ) -> LessonGenerationRunRead:
     task = _task_or_404(task_id, session, current_user)
     if session.get(SourceConfirmation, task_id) is None:
-        raise HTTPException(status_code=409, detail="请先确认课程标准与人才培养方案的对应关系")
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "课程依据尚未确认或已失效（重新上传课程标准或人才培养方案后需要重新确认）。"
+                "请到「课程资料」页点「确认课程依据」，再生成整门课教案"
+            ),
+        )
     config = session.exec(
         select(AiModelConfig).where(
             AiModelConfig.enabled == True,  # noqa: E712

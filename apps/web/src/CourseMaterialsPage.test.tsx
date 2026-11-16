@@ -10,13 +10,14 @@ const remapScheduleCandidate = vi.fn();
 const confirmScheduleCandidate = vi.fn();
 const discardScheduleCandidate = vi.fn();
 const uploadScheduleCandidate = vi.fn();
+const confirmSources = vi.fn();
 
 vi.mock("./api", () => ({
   getCourseReadiness: (...args: unknown[]) => getCourseReadiness(...args),
   remapScheduleCandidate: (...args: unknown[]) => remapScheduleCandidate(...args),
   confirmScheduleCandidate: (...args: unknown[]) => confirmScheduleCandidate(...args),
   discardScheduleCandidate: (...args: unknown[]) => discardScheduleCandidate(...args),
-  confirmSources: vi.fn(),
+  confirmSources: (...args: unknown[]) => confirmSources(...args),
   generateOutline: vi.fn(),
   resolveReviewNotice: vi.fn(),
   uploadCourseStandard: vi.fn(),
@@ -352,4 +353,34 @@ it("tells the parent the course summary changed once the new timetable is confir
 
   expect(confirmScheduleCandidate).toHaveBeenCalledWith(1, 5);
   expect(onTaskChanged).toHaveBeenCalledTimes(1);
+});
+
+it("brings the confirm button back with its reason when a re-upload voids the confirmation after the outline", async () => {
+  const user = userEvent.setup();
+  const ready = { ...readinessWith(null), materials: { ...readinessWith(null).materials, schedule: material("ready") } };
+  const lapsed = {
+    ...ready,
+    source_review: { ...ready.source_review, can_confirm: true, confirmed: false },
+    blocking_reasons: [{
+      code: "sources_reconfirm_required",
+      message: "课程实施大纲生成后重新上传了课程标准或人才培养方案，原来的课程依据确认已失效。请核对课程目标与能力指标的对应关系后重新确认，确认后才能继续生成整门课教案",
+      material_kind: null
+    }],
+    next_action: "confirm_sources"
+  } as unknown as CourseReadiness;
+  const restored = {
+    ...ready,
+    source_review: { ...ready.source_review, can_confirm: true, confirmed: true },
+    next_action: "open_outline"
+  } as unknown as CourseReadiness;
+  getCourseReadiness.mockResolvedValueOnce(lapsed).mockResolvedValue(restored);
+  confirmSources.mockResolvedValue({});
+  render(<CourseMaterialsPage task={task} onOpenOutline={vi.fn()} onError={vi.fn()} onTaskChanged={vi.fn()} />);
+
+  expect(await screen.findByText(/原来的课程依据确认已失效/)).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "确认课程依据" }));
+
+  expect(confirmSources).toHaveBeenCalledWith(1);
+  expect(await screen.findByRole("button", { name: "查看已有课程实施大纲" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "确认课程依据" })).not.toBeInTheDocument();
 });

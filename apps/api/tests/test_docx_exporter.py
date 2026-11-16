@@ -372,3 +372,68 @@ def test_generated_text_copies_the_format_the_template_marks_in_red(tmp_path):
     assert written.font.size == Pt(10.5)
     # The red only marked what to generate; the document itself is black.
     assert written.font.color.rgb is None
+
+
+def _paint_template_red(path):
+    """Mark cells the way the school template does: the run, the paragraph mark, and
+    an empty run Word leaves behind all carry the contract colour."""
+    from docx.shared import RGBColor
+
+    doc = Document(path)
+    info = doc.tables[0]
+    for row, column in ((2, 1), (3, 1), (3, 5), (7, 0)):
+        paragraph = info.cell(row, column).paragraphs[0]
+        paragraph.runs[0].font.color.rgb = RGBColor.from_string("C00000")
+        paragraph.add_run("").font.color.rgb = RGBColor.from_string("C00000")
+        mark = paragraph._p.get_or_add_pPr()
+        run_properties = OxmlElement("w:rPr")
+        colour = OxmlElement("w:color")
+        colour.set(qn("w:val"), "C00000")
+        run_properties.append(colour)
+        mark.append(run_properties)
+    return doc
+
+
+def _red_marks(path) -> int:
+    body = Document(path).element.body
+    return sum(1 for colour in body.iter(qn("w:color")) if colour.get(qn("w:val")) == "C00000")
+
+
+def test_exported_lessons_carry_no_template_red(tmp_path):
+    """The red only says "generate this". Left on paragraph marks and empty runs, it
+    turned everything the teacher typed into the exported lesson plan red."""
+    template = tmp_path / "lesson-template.docx"
+    output = tmp_path / "lesson-output.docx"
+    _make_structured_lesson_template(template)
+    _paint_template_red(template).save(template)
+    assert _red_marks(template) > 0
+
+    fill_lesson_docx(
+        template,
+        output,
+        {"课程名称": "人工智能与创意设计", "任课教师": "张老师", "授课班级": "数媒 2501"},
+        [_export_lesson(), _export_lesson()],
+        contexts=[{"week_no": 1, "weekday": "周一", "periods": "1-4", "location": "A101"}] * 2,
+    )
+
+    assert _red_marks(output) == 0
+    assert Document(output).tables[0].cell(2, 1).text == "第 1 次课：AIGC 导入"
+
+
+def test_clearing_the_red_does_not_hide_a_cell_left_unfilled(tmp_path):
+    """The before-export comparison reads the marking from the template, so clearing
+    the produced document's red must not let a stale cell slip through."""
+    from docx.shared import RGBColor
+
+    template = tmp_path / "lesson-template.docx"
+    output = tmp_path / "lesson-output.docx"
+    _make_structured_lesson_template(template)
+    doc = _paint_template_red(template)
+    stray = doc.tables[0].cell(5, 1)
+    stray.text = "模板里另一门课的学情分析"
+    stray.paragraphs[0].runs[0].font.color.rgb = RGBColor.from_string("C00000")
+    doc.save(template)
+
+    with pytest.raises(LessonTemplateError, match="仍是模板原文"):
+        fill_lesson_docx(template, output, {}, [_export_lesson()], contexts=[{}])
+    assert not output.exists()

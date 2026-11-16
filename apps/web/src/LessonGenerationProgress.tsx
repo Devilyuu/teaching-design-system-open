@@ -118,7 +118,9 @@ export default function LessonGenerationProgress({
         {!compact && !["pending", "running"].includes(run.status) && <button className="btn" type="button" onClick={start}><RefreshCw className="icon" />新建生成任务</button>}
       </div>
       <progress aria-label="教案生成进度" max={run.total_items} value={run.succeeded_items} />
-      {!compact && run.items.some((item) => item.status === "failed") && (
+      {/* Failed sessions must stay retryable in the compact bar too: once any lesson succeeds the page
+          switches to compact mode, and hiding retry there left teachers no way to recover one session. */}
+      {run.items.some((item) => item.status === "failed") && (
         <div className="generation-failures">
           {run.items.filter((item) => item.status === "failed").map((item, index) => (
             <div key={item.id}><span>失败课次 {index + 1} · {item.error_code}</span><button className="btn" type="button" disabled={busy} onClick={() => retry(item.id)}>重试</button></div>

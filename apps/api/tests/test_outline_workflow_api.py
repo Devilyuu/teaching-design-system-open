@@ -806,6 +806,44 @@ def test_replacing_authoritative_source_marks_existing_outline_for_review(tmp_pa
     assert readiness["source_review"]["confirmed"] is False
 
 
+def test_reuploading_a_source_after_the_outline_brings_the_confirm_button_back(tmp_path):
+    """大纲生成后重传人才培养方案，确认会失效，但页面曾只剩「查看已有课程实施大纲」。
+
+    教师找不到「确认课程依据」，整门课教案又被后端拒绝，自己无法恢复。确认入口必须回来，
+    而且仍要经过来源校验那道闸门——这里走的就是正常的 /sources/confirm。
+    """
+    talent_plan = tmp_path / "replacement-talent-plan.docx"
+    make_talent_plan_docx(talent_plan)
+
+    with TestClient(app) as client:
+        task_id, _ = prepare_outline(client, tmp_path)
+        assert client.get(f"/tasks/{task_id}/readiness").json()["next_action"] == "open_outline"
+
+        with talent_plan.open("rb") as file:
+            uploaded = client.post(
+                f"/tasks/{task_id}/talent-plan",
+                files={"file": ("talent-plan.docx", file, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+            )
+        assert uploaded.status_code == 200
+        lapsed = client.get(f"/tasks/{task_id}/readiness")
+        refused = client.post(f"/tasks/{task_id}/lesson-generation-runs")
+
+        confirmed = client.post(f"/tasks/{task_id}/sources/confirm")
+        restored = client.get(f"/tasks/{task_id}/readiness").json()
+
+    assert lapsed.status_code == 200
+    body = lapsed.json()
+    assert body["next_action"] == "confirm_sources"
+    assert body["source_review"]["can_confirm"] is True
+    blocker = next(item for item in body["blocking_reasons"] if item["code"] == "sources_reconfirm_required")
+    assert "重新上传" in blocker["message"] and "失效" in blocker["message"]
+    assert refused.status_code == 409
+    assert "确认课程依据" in refused.json()["detail"]
+    assert confirmed.status_code == 200
+    assert restored["next_action"] == "open_outline"
+    assert all(item["code"] != "sources_reconfirm_required" for item in restored["blocking_reasons"])
+
+
 def test_outline_generation_and_docx_export_workflow(tmp_path):
     standard = tmp_path / "standard.docx"
     schedule = tmp_path / "schedule.xlsx"

@@ -127,6 +127,33 @@ def test_readiness_routes_existing_outline_to_editor_instead_of_generation():
     assert result.blocking_reasons == []
 
 
+def test_a_lapsed_confirmation_with_an_outline_routes_back_to_confirming():
+    """Re-uploading a source drops the confirmation but keeps the outline.
+
+    Routing to "open_outline" here hid the only button that unblocks lesson generation.
+    """
+    result = build_course_readiness(**ready_inputs(outline_rows=[item(id=1, session_no=1)], confirmation=None))
+
+    assert result.next_action == "confirm_sources"
+    assert [entry.code for entry in result.blocking_reasons] == ["sources_reconfirm_required"]
+    assert "重新上传" in result.blocking_reasons[0].message
+
+
+def test_a_lapsed_confirmation_still_shows_unknown_codes_first():
+    result = build_course_readiness(
+        **ready_inputs(
+            outline_rows=[item(id=1, session_no=1)],
+            confirmation=None,
+            goals=[item(code="M1", description="目标", ability_codes="9-9-9")],
+        )
+    )
+
+    # The button comes back but stays behind the source gate: unknown codes are listed and
+    # the confirm route itself still refuses them.
+    assert result.next_action == "confirm_sources"
+    assert [entry.code for entry in result.blocking_reasons] == ["ability_codes_unknown", "sources_reconfirm_required"]
+
+
 def test_readiness_recognizes_legacy_parsed_sources_and_templates():
     inputs = ready_inputs(materials=[], legacy_templates={"outline", "lesson"})
     result = build_course_readiness(**inputs)

@@ -183,13 +183,26 @@ def build_course_readiness(
                 "schedule",
             )
         )
-    if confirmation is None:
+    if confirmation is None and outline_rows:
+        # Re-uploading the standard or the talent plan drops the confirmation, but the outline
+        # stays. Saying only "尚未确认" made teachers think they had never done it; tell them why
+        # it lapsed so they know re-confirming (not regenerating the outline) is the way back.
+        blockers.append(
+            ReadinessBlocker(
+                "sources_reconfirm_required",
+                "课程实施大纲生成后重新上传了课程标准或人才培养方案，原来的课程依据确认已失效。"
+                "请核对课程目标与能力指标的对应关系后重新确认，确认后才能继续生成整门课教案",
+            )
+        )
+    elif confirmation is None:
         blockers.append(ReadinessBlocker("sources_unconfirmed", "课程依据尚未确认"))
     if ai_config is None or not ai_config.enabled or ai_config.connection_status != "connected":
         blockers.append(ReadinessBlocker("ai_model_unavailable", "AI 模型尚未测试并启用"))
 
     if outline_rows:
-        next_action = "open_outline"
+        # With an outline already there, the confirm button is the only way back to lesson
+        # generation, so it wins over "open_outline" whenever the confirmation has lapsed.
+        next_action = "open_outline" if confirmation is not None else "confirm_sources"
     elif any(item.code.endswith("_missing") for item in blockers) or any(
         item.code == "ai_model_unavailable" for item in blockers
     ):

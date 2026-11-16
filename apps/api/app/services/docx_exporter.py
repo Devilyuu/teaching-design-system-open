@@ -376,6 +376,11 @@ def fill_lesson_docx(
                 + "；".join(stale[:6])
                 + (f"（共 {len(stale)} 处）" if len(stale) > 6 else "")
             )
+        # Filling a cell only strips the red from the runs it writes. The template's
+        # paragraph marks and empty runs stay C00000, so whatever the teacher types
+        # there comes out red. Cleared after the check above, which reads the
+        # marking from the template file, not from this document.
+        clear_generated_marking(document)
 
     document.save(str(output_path))
 

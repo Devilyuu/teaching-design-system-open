@@ -167,8 +167,36 @@ const exportRecords = [
   }
 ];
 
-function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean; mustChangePassword?: boolean; teacherWithoutProfile?: boolean } = {}) {
+// One session succeeded and one failed: the page has lessons, so the progress bar is in compact mode.
+function partialLessonRun(status: "pending" | "completed" | "completed_with_errors") {
+  const failedStill = status === "completed_with_errors";
+  return {
+    id: 51,
+    task_id: 1,
+    status,
+    total_items: 2,
+    succeeded_items: failedStill || status === "pending" ? 1 : 2,
+    failed_items: failedStill ? 1 : 0,
+    created_at: "2026-07-02T08:00:00Z",
+    finished_at: status === "pending" ? null : "2026-07-02T08:01:00Z",
+    items: [
+      { id: 61, outline_row_id: 11, lesson_plan_id: 21, status: "succeeded", attempts: 1, duration_ms: 200, error_code: "" },
+      {
+        id: 62,
+        outline_row_id: 12,
+        lesson_plan_id: failedStill || status === "pending" ? null : 22,
+        status: failedStill ? "failed" : status === "pending" ? "pending" : "succeeded",
+        attempts: 1,
+        duration_ms: 200,
+        error_code: failedStill ? "model_timeout" : ""
+      }
+    ]
+  };
+}
+
+function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean; mustChangePassword?: boolean; teacherWithoutProfile?: boolean; partialLessonRun?: boolean } = {}) {
   let lessonsGenerated = false;
+  let retriedFailedItem = false;
   let mustChangePassword = Boolean(options.mustChangePassword);
   const asTeacher = Boolean(options.teacherWithoutProfile);
   let profile = { name: asTeacher ? "张老师" : "系统管理员", office_location: "", phone: "", bio: "", complete: false };
@@ -342,6 +370,16 @@ function mockFetch(options: { unknownCodes?: boolean; noSessionLesson?: boolean;
 
     if (url.endsWith("/tasks/1/lessons") && (!init || init.method === undefined)) {
       return jsonResponse(lessonsGenerated ? lessonPlans : []);
+    }
+
+    if (options.partialLessonRun && url.endsWith("/tasks/1/lesson-generation-runs/51/items/62/retry") && init?.method === "POST") {
+      retriedFailedItem = true;
+      return jsonResponse(partialLessonRun("pending"));
+    }
+
+    if (options.partialLessonRun && url.match(/\/tasks\/1\/lesson-generation-runs(\/51)?$/)) {
+      lessonsGenerated = true;
+      return jsonResponse(partialLessonRun(retriedFailedItem ? "completed" : "completed_with_errors"));
     }
 
     if (url.endsWith("/tasks/1/lesson-generation-runs") && init?.method === "POST") {
@@ -1056,6 +1094,27 @@ describe("App", () => {
 
     const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
     expect(calledUrls).toContain("http://localhost:8000/tasks/1/lesson-generation-runs");
+  });
+
+  it("keeps retry reachable for a failed session after other sessions already succeeded", async () => {
+    const user = userEvent.setup();
+    const fetchMock = mockFetch({ partialLessonRun: true });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "我的课程" }));
+    await user.click(screen.getByRole("button", { name: "进入课程" }));
+    await user.click(screen.getByRole("tab", { name: "整门课教案" }));
+    await user.click(await screen.findByRole("button", { name: "生成整门课教案" }));
+
+    // Lessons exist now, so the page has switched to the compact progress bar.
+    expect(await screen.findByText("第 1 次课：理解 AIGC 基础与创意设计流程")).toBeInTheDocument();
+    expect(screen.getByText("1 次失败")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "重试" }));
+
+    const calledUrls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(calledUrls).toContain("http://localhost:8000/tasks/1/lesson-generation-runs/51/items/62/retry");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "重试" })).not.toBeInTheDocument());
   });
 
   it("protects unsaved whole-course lesson edits before export", async () => {
